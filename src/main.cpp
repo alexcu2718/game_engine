@@ -74,6 +74,22 @@ int main() {
     return 1;
   }
 
+  // Create render pass
+  if (!ctx.createRenderPass()) {
+    std::cerr << "Failed to create render pass\n";
+    vkDestroyRenderPass(ctx.device(), ctx.renderPass(), nullptr);
+    ctx.shutdown();
+    glfwTerminate();
+  }
+
+  // Create graphics pipeline
+  if (!ctx.createGraphicsPipeline()) {
+    std::cerr << "Failed to create graphics pipeline\n";
+    vkDestroyPipeline(ctx.device(), ctx.graphicsPipeline(), nullptr);
+    ctx.shutdown();
+    glfwTerminate();
+  }
+
   while (!glfwWindowShouldClose(window)) {
     glfwPollEvents();
     // Rendering

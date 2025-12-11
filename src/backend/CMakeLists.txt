@@ -3,6 +3,8 @@ add_library(backend STATIC
     vulkan_context.hpp
     vulkan_swapchain.cpp
     vulkan_swapchain.hpp
+    vulkan_shader.cpp
+    vulkan_shader.hpp
 )
 
 target_include_directories(backend
