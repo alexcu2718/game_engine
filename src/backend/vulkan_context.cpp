@@ -144,6 +144,11 @@ bool VulkanContext::init(const std::vector<const char *> &platformExtensions) {
 
 void VulkanContext::shutdown() {
   if (m_device != VK_NULL_HANDLE) {
+    // Wait so nothing is in flight
+    vkDeviceWaitIdle(m_device);
+
+    // destroyFramebuffers();
+
     if (m_graphicsPipeline != VK_NULL_HANDLE) {
       vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
       m_graphicsPipeline = VK_NULL_HANDLE;
@@ -157,9 +162,6 @@ void VulkanContext::shutdown() {
       m_renderPass = VK_NULL_HANDLE;
     }
 
-    // m_swapchain.shutdown(m_device);
-
-    vkDeviceWaitIdle(m_device);
     vkDestroyDevice(m_device, nullptr);
     m_device = VK_NULL_HANDLE;
   }
@@ -173,6 +175,10 @@ void VulkanContext::shutdown() {
     vkDestroyInstance(m_instance, nullptr);
     m_instance = VK_NULL_HANDLE;
   }
+
+  m_physicalDevice = VK_NULL_HANDLE;
+  m_graphicsQueue = VK_NULL_HANDLE;
+  m_graphicsQueueFamilyIndex = UINT32_MAX;
 }
 
 bool VulkanContext::checkValidationLayerSupport() {
@@ -399,13 +405,15 @@ bool VulkanContext::setupDebugMessenger() {
   return true;
 }
 
-bool VulkanContext::createRenderPass() {
+bool VulkanContext::createRenderPass(VkFormat swapchainFormat) {
   if (m_device == VK_NULL_HANDLE) {
     std::cerr << "[RenderPass] Device is null\n";
     return false;
   }
 
-  VkFormat colorFormat = m_swapchain.swapchainImageFormat();
+  VkFormat colorFormat = swapchainFormat;
+
+  // VkFormat colorFormat = m_swapchain.swapchainImageFormat();
   if (colorFormat == VK_FORMAT_UNDEFINED) {
     std::cerr << "[RenderPass] Swapchain image format undefined\n";
     return false;
@@ -455,11 +463,11 @@ bool VulkanContext::createRenderPass() {
     return false;
   }
 
-  std::cout << "[RenderPass] Create\n";
+  std::cout << "[RenderPass] Render pass created\n";
   return true;
 }
 
-bool VulkanContext::createGraphicsPipeline() {
+bool VulkanContext::createGraphicsPipeline(VkExtent2D swapchainExtent) {
   if (m_device == VK_NULL_HANDLE || m_renderPass == VK_NULL_HANDLE) {
     std::cerr << "[Pipeline] Device or render pass not initialized\n";
     return false;
@@ -513,7 +521,8 @@ bool VulkanContext::createGraphicsPipeline() {
   inputAssembly.primitiveRestartEnable = VK_FALSE;
 
   // Viewport / scissor
-  VkExtent2D extent = m_swapchain.swapchainExtent();
+  // VkExtent2D extent = m_swapchain.swapchainExtent();
+  VkExtent2D extent = swapchainExtent;
 
   VkViewport viewport{};
   viewport.x = 0.0f;
@@ -614,4 +623,67 @@ bool VulkanContext::createGraphicsPipeline() {
 
   std::cout << "[Pipeline] Graphics pipeline created\n";
   return true;
+}
+
+bool VulkanContext::createFrameBuffers(
+    const std::vector<VkImageView> &swapchainImageViews,
+    VkExtent2D swapchainExtent) {
+  if (m_device == VK_NULL_HANDLE || m_renderPass == VK_NULL_HANDLE) {
+    std::cerr << "[Framebuffers] Device or render pass not ready\n";
+    return false;
+  }
+
+  // const auto &views = m_swapchain.swapchainImageViews();
+  const auto &views = swapchainImageViews;
+
+  if (views.empty()) {
+    std::cerr << "[Framebuffers] No swapchain image views.\n";
+    return false;
+  }
+
+  // Clean if called twice
+  destroyFramebuffers();
+
+  // VkExtent2D extent = m_swapchain.swapchainExtent();
+  VkExtent2D extent = swapchainExtent;
+  m_swapchainFramebuffers.resize(views.size(), VK_NULL_HANDLE);
+
+  for (size_t i = 0; i < views.size(); ++i) {
+    VkImageView attachments[] = {views[i]};
+
+    VkFramebufferCreateInfo fbInfo{};
+    fbInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    fbInfo.renderPass = m_renderPass;
+    fbInfo.attachmentCount = 1;
+    fbInfo.pAttachments = attachments;
+    fbInfo.width = extent.width;
+    fbInfo.height = extent.height;
+    fbInfo.layers = 1;
+
+    VkResult res = vkCreateFramebuffer(m_device, &fbInfo, nullptr,
+                                       &m_swapchainFramebuffers[i]);
+    if (res != VK_SUCCESS) {
+      std::cerr << "[Framebuffers] vkCreateFramebuffer() failed at index " << i
+                << " error=" << res << "\n";
+      return false;
+    }
+  }
+
+  std::cout << "[Framebuffers] Created " << m_swapchainFramebuffers.size()
+            << " framebuffers\n";
+  return true;
+}
+
+void VulkanContext::destroyFramebuffers() {
+  if (m_device == VK_NULL_HANDLE) {
+    m_swapchainFramebuffers.clear();
+    return;
+  }
+
+  for (VkFramebuffer fb : m_swapchainFramebuffers) {
+    if (fb != VK_NULL_HANDLE) {
+      vkDestroyFramebuffer(m_device, fb, nullptr);
+    }
+  }
+  m_swapchainFramebuffers.clear();
 }

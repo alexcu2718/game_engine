@@ -236,6 +236,8 @@ bool VulkanSwapchain::init(VkPhysicalDevice physicalDevice, VkDevice device,
 void VulkanSwapchain::shutdown(VkDevice device) {
   std::cout << "[Swapchain] shutdown has begun\n";
 
+  destroySwapchainImageViews(device);
+
   if (m_swapChain != VK_NULL_HANDLE) {
     std::cout << "[Swapchain] Destroying swapchain\n";
     vkDestroySwapchainKHR(device, m_swapChain, nullptr);
@@ -249,4 +251,75 @@ void VulkanSwapchain::shutdown(VkDevice device) {
   m_surface = VK_NULL_HANDLE;
 
   std::cout << "[Swapchain] shutdown completed\n";
+}
+
+bool VulkanSwapchain::createSwapchainImageViews(VkDevice device) {
+  // If called twice, clean up first
+  destroySwapchainImageViews(device);
+
+  if (device == VK_NULL_HANDLE) {
+    std::cerr << "[ImageViews] Device is null\n";
+    return false;
+  }
+
+  const auto &images = swapchainImages();
+  if (images.empty()) {
+    std::cerr << "[ImageViews] Swapchain images are empty\n";
+    return false;
+  }
+
+  VkFormat format = swapchainImageFormat();
+  if (format == VK_FORMAT_UNDEFINED) {
+    std::cerr << "[ImageViews] Swapchain format undefined\n";
+    return false;
+  }
+
+  m_swapchainImageViews.resize(images.size(), VK_NULL_HANDLE);
+
+  for (size_t i = 0; i < images.size(); ++i) {
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = images[i];
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format = format;
+
+    viewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    viewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    viewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    viewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = 1;
+
+    VkResult res = vkCreateImageView(device, &viewInfo, nullptr,
+                                     &m_swapchainImageViews[i]);
+    if (res != VK_SUCCESS) {
+      std::cerr << "[Swapchain] vkCreateImageView() failed at index " << i
+                << " error=" << res << "\n";
+      // destroy any created so far
+      destroySwapchainImageViews(device);
+      return false;
+    }
+  }
+
+  std::cout << "[Swapchain] Created " << m_swapchainImageViews.size()
+            << " swapchain image views\n";
+  return true;
+}
+
+void VulkanSwapchain::destroySwapchainImageViews(VkDevice device) {
+  if (device == VK_NULL_HANDLE) {
+    m_swapchainImageViews.clear();
+    return;
+  }
+
+  for (VkImageView v : m_swapchainImageViews) {
+    if (v != VK_NULL_HANDLE) {
+      vkDestroyImageView(device, v, nullptr);
+    }
+  }
+  m_swapchainImageViews.clear();
 }

@@ -1,9 +1,28 @@
 #include "backend/vulkan_context.hpp"
+#include "vulkan_presenter.hpp"
 #include <GLFW/glfw3.h>
 #include <iostream>
 #include <vulkan/vulkan_core.h>
 
 int main() {
+  GLFWwindow *window = nullptr;
+
+  VulkanPresenter presenter;
+  VulkanContext ctx;
+
+  auto cleanup = [&]() {
+    ctx.destroyFramebuffers();
+    presenter.shutdown(ctx);
+    ctx.shutdown();
+
+    if (window) {
+      glfwDestroyWindow(window);
+      window = nullptr;
+    }
+
+    glfwTerminate();
+  };
+
   if (!glfwInit()) {
     std::cerr << "Failed to initialize GLFW\n";
     return 1;
@@ -15,46 +34,30 @@ int main() {
   uint32_t glfwExtCount = 0;
   const char **glfwExts = glfwGetRequiredInstanceExtensions(&glfwExtCount);
   if (!glfwExts || glfwExtCount == 0) {
-    std::cerr << "glfwGetRequiredInstanceExtensions returned nothins\n";
-    glfwTerminate();
+    std::cerr << "glfwGetRequiredInstanceExtensions returned nothing\n";
+    cleanup();
     return 1;
   }
 
   std::vector<const char *> platformExtensions(glfwExts,
                                                glfwExts + glfwExtCount);
 
-  VulkanContext ctx;
   if (!ctx.init(platformExtensions)) {
     std::cerr << "Failed to initialize Vulkan\n";
-    glfwTerminate();
+    cleanup();
     return 1;
   }
 
-  GLFWwindow *window =
-      glfwCreateWindow(800, 600, "Hello Window", nullptr, nullptr);
+  window = glfwCreateWindow(800, 600, "Hello Window", nullptr, nullptr);
   if (!window) {
     std::cerr << "Failed to create window\n";
-    ctx.shutdown();
-    glfwTerminate();
-    return 1;
-  }
-
-  // Create VkSurfaceKHR
-  VkSurfaceKHR surface = VK_NULL_HANDLE;
-  VkResult surfRes =
-      glfwCreateWindowSurface(ctx.instance(), window, nullptr, &surface);
-  if (surfRes != VK_SUCCESS) {
-    std::cerr << "Failed to create window surface, error " << surfRes << "\n";
-    glfwDestroyWindow(window);
-    ctx.shutdown();
-    glfwTerminate();
+    cleanup();
     return 1;
   }
 
   // Get size (in pixels) for swapchain extent
   // TODO: Make this a helper function in vulkan_swapchain
-  int fbWidth = 0;
-  int fbHeight = 0;
+  int fbWidth = 0, fbHeight = 0;
   glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
   if (fbWidth == 0 || fbHeight == 0) {
     int winWidth = 0;
@@ -64,30 +67,31 @@ int main() {
     fbHeight = winHeight;
   }
 
-  // Create swapchain
-  if (!ctx.createSwapchain(surface, static_cast<uint32_t>(fbWidth),
-                           static_cast<uint32_t>(fbHeight))) {
-    std::cerr << "Failed to create swapchain\n";
-    vkDestroySurfaceKHR(ctx.instance(), surface, nullptr);
-    ctx.shutdown();
-    glfwTerminate();
+  if (!presenter.init(ctx, window, (uint32_t)fbWidth, (uint32_t)fbHeight)) {
+    std::cerr << "Failed to initialize presenter\n";
+    cleanup();
     return 1;
   }
 
   // Create render pass
-  if (!ctx.createRenderPass()) {
+  if (!ctx.createRenderPass(presenter.imageFormat())) {
     std::cerr << "Failed to create render pass\n";
-    vkDestroyRenderPass(ctx.device(), ctx.renderPass(), nullptr);
-    ctx.shutdown();
-    glfwTerminate();
+    cleanup();
+    return 1;
   }
 
   // Create graphics pipeline
-  if (!ctx.createGraphicsPipeline()) {
+  if (!ctx.createGraphicsPipeline(presenter.extent())) {
     std::cerr << "Failed to create graphics pipeline\n";
-    vkDestroyPipeline(ctx.device(), ctx.graphicsPipeline(), nullptr);
-    ctx.shutdown();
-    glfwTerminate();
+    cleanup();
+    return 1;
+  }
+
+  // Create frame buffers
+  if (!ctx.createFrameBuffers(presenter.imageViews(), presenter.extent())) {
+    std::cerr << "Failed to create framebuffers\n";
+    cleanup();
+    return 1;
   }
 
   while (!glfwWindowShouldClose(window)) {
@@ -95,13 +99,6 @@ int main() {
     // Rendering
   }
 
-  vkDeviceWaitIdle(ctx.device());
-
-  ctx.destroySwapchain();
-  vkDestroySurfaceKHR(ctx.instance(), surface, nullptr);
-  glfwDestroyWindow(window);
-  glfwTerminate();
-
-  ctx.shutdown();
+  cleanup();
   return 0;
 }

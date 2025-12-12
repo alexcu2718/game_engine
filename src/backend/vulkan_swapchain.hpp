@@ -18,8 +18,16 @@ public:
   VkSwapchainKHR swapchain() const { return m_swapChain; }
   VkFormat swapchainImageFormat() const { return m_swapChainImageFormat; }
   VkExtent2D swapchainExtent() const { return m_swapChainExtent; }
+
+  bool createSwapchainImageViews(VkDevice device);
+  void destroySwapchainImageViews(VkDevice device);
+
   const std::vector<VkImage> &swapchainImages() const {
     return m_swapChainImages;
+  }
+
+  const std::vector<VkImageView> &swapchainImageViews() const {
+    return m_swapchainImageViews;
   }
 
 private:
@@ -41,6 +49,7 @@ private:
   VkSurfaceKHR m_surface = VK_NULL_HANDLE;
   VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
   std::vector<VkImage> m_swapChainImages;
+  std::vector<VkImageView> m_swapchainImageViews;
   VkFormat m_swapChainImageFormat = VK_FORMAT_UNDEFINED;
   VkExtent2D m_swapChainExtent{};
 };

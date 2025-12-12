@@ -1,6 +1,5 @@
 #pragma once
 
-#include "vulkan_swapchain.hpp"
 #include <cstdint>
 #include <optional>
 #include <vector>
@@ -25,23 +24,22 @@ public:
     return m_graphicsQueueFamilyIndex;
   }
 
-  // Swapchain
-  bool createSwapchain(VkSurfaceKHR surface, uint32_t width, uint32_t height) {
-    return m_swapchain.init(m_physicalDevice, m_device, surface, width, height,
-                            m_graphicsQueueFamilyIndex);
-  }
-
-  void destroySwapchain() { m_swapchain.shutdown(m_device); }
-
-  const VulkanSwapchain &swapchain() const { return m_swapchain; }
-
   // Render pass
   VkRenderPass renderPass() const { return m_renderPass; }
   VkPipelineLayout pipelineLayout() const { return m_pipelineLayout; }
   VkPipeline graphicsPipeline() const { return m_graphicsPipeline; }
 
-  bool createRenderPass();
-  bool createGraphicsPipeline();
+  bool createRenderPass(VkFormat swapchainFormat);
+  bool createGraphicsPipeline(VkExtent2D swapchainExtent);
+
+  // Frame buffer
+  bool createFrameBuffers(const std::vector<VkImageView> &swapchainImageViews,
+                          VkExtent2D swapchainExtent);
+  void destroyFramebuffers();
+
+  const std::vector<VkFramebuffer> &framebuffers() const {
+    return m_swapchainFramebuffers;
+  }
 
 private:
   bool checkValidationLayerSupport();
@@ -68,11 +66,11 @@ private:
   VkQueue m_graphicsQueue = VK_NULL_HANDLE;
   uint32_t m_graphicsQueueFamilyIndex = UINT32_MAX;
 
-  VulkanSwapchain m_swapchain;
-
   VkRenderPass m_renderPass = VK_NULL_HANDLE;
   VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
   VkPipeline m_graphicsPipeline = VK_NULL_HANDLE;
+
+  std::vector<VkFramebuffer> m_swapchainFramebuffers;
 
   bool m_enableValidationLayers = true; // Gated by NDEBUG in cpp
 };
