@@ -192,6 +192,7 @@ bool VkSwapchain::init(VkPhysicalDevice physicalDevice, VkDevice device,
   createInfo.imageExtent = extent;
   createInfo.imageArrayLayers = 1;
   createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+  createInfo.presentMode = presentMode;
 
   uint32_t queueFamilyIndices[] = {graphicsQueueFamilyIndex};
   createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -201,6 +202,7 @@ bool VkSwapchain::init(VkPhysicalDevice physicalDevice, VkDevice device,
   // Can be set to IDENTITY for non desktop apps
   createInfo.preTransform = support.capabilities.currentTransform;
   // Usually opaque
+  // TODO: add flag to check that alpha_opaque is available
   createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
   // Clipped pixels are rendered out
   createInfo.clipped = VK_TRUE;
