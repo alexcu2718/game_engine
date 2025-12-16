@@ -8,8 +8,6 @@
 constexpr uint32_t kOneFence = 1;
 constexpr VkBool32 kWaitAll = VK_TRUE;
 
-// TODO: allocate command buffers per framesInFlight instead of swapchain image
-
 bool VkFrameManager::init(VkDevice device, uint32_t framesInFlight,
                           uint32_t swapchainImageCount) {
   if (device == VK_NULL_HANDLE) {
@@ -140,7 +138,7 @@ VkFrameManager::FrameStatus VkFrameManager::beginFrame(VkSwapchainKHR swapchain,
   }
 
   if (acq == VK_SUBOPTIMAL_KHR) {
-    // TODO: signal recreate swapchain
+    // TODO: signal recreate swapchain when convienent
   } else if (acq != VK_SUCCESS) {
     std::cerr << "[Frame] vkAcquireNextImageKHR failed: " << acq << "\n";
     return FrameStatus::Error;

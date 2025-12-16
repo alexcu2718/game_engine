@@ -65,14 +65,15 @@ bool Renderer::init(VkDevice device, VkQueue graphicsQueue,
     return false;
   }
 
-  const uint32_t imageCount =
-      static_cast<uint32_t>(presenter.imageViews().size());
-
-  if (!m_commands.allocate(imageCount)) {
+  // Allocate buffer per frame
+  if (!m_commands.allocate(m_framesInFlight)) {
     std::cerr << "[Renderer] Failed to allocate command buffers\n";
     shutdown();
     return false;
   }
+
+  const uint32_t imageCount =
+      static_cast<uint32_t>(presenter.imageViews().size());
 
   if (!m_frames.init(m_device, m_framesInFlight, imageCount)) {
     std::cerr << "[Renderer] Failed to create frame sync objects\n";
@@ -122,6 +123,22 @@ void Renderer::recordFrame(VkCommandBuffer cmd, VkFramebuffer fb,
   vkCmdBeginRenderPass(cmd, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);
   vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                     m_pipeline.pipeline());
+
+  // Viewport / scissor
+  VkViewport viewport{};
+  viewport.x = 0.0F;
+  viewport.y = 0.0F;
+  viewport.width = static_cast<float>(extent.width);
+  viewport.height = static_cast<float>(extent.height);
+  viewport.minDepth = 0.0F;
+  viewport.maxDepth = 1.0F;
+  vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+  VkRect2D scissor{};
+  scissor.offset = VkOffset2D{0, 0};
+  scissor.extent = extent;
+  vkCmdSetScissor(cmd, 0, 1, &scissor);
+
   vkCmdDraw(cmd, 3, 1, 0, 0);
   vkCmdEndRenderPass(cmd);
 
@@ -141,11 +158,13 @@ bool Renderer::drawFrame(VkPresenter &presenter) {
     (void)recreateSwapchainDependent(presenter, m_vertPath, m_fragPath);
     return true;
   }
+
   if (st != FrameStatus::Ok && st != FrameStatus::Suboptimal) {
     return false;
   }
 
-  VkCommandBuffer cmd = m_commands.buffers()[imageIndex];
+  const uint32_t frameIndex = m_frames.currentFrameIndex();
+  VkCommandBuffer cmd = m_commands.buffers()[frameIndex];
   vkResetCommandBuffer(cmd, 0);
 
   recordFrame(cmd, m_framebuffers.at(imageIndex), presenter.extent());
@@ -158,6 +177,7 @@ bool Renderer::drawFrame(VkPresenter &presenter) {
     (void)recreateSwapchainDependent(presenter, m_vertPath, m_fragPath);
     return true;
   }
+
   return pst == FrameStatus::Ok || pst == FrameStatus::Suboptimal;
 }
 
@@ -168,27 +188,32 @@ bool Renderer::recreateSwapchainDependent(VkPresenter &presenter,
     return false;
   }
 
+  const VkFormat oldFormat = presenter.imageFormat();
+
   vkDeviceWaitIdle(m_device);
 
   m_framebuffers.shutdown();
-  m_pipeline.shutdown();
-  m_renderPass.shutdown();
 
   if (!presenter.recreateSwapchain()) {
     return false;
   }
 
-  // Recreate render pass (format can change)
-  // TODO: conditionalize for only if format changes
-  if (!m_renderPass.init(m_device, presenter.imageFormat())) {
-    return false;
-  }
+  // Keep pipeline and render pass unless format changes
+  const VkFormat newFormat = presenter.imageFormat();
+  const bool formatChanged = (newFormat != oldFormat);
 
-  // Recreate pipeline (extent can change)
-  // TODO: make viewport dynamic so pipeline doesn't have to be rebuilt
-  if (!m_pipeline.init(m_device, m_renderPass.handle(), presenter.extent(),
-                       vertSpvPath, fragSpvPath)) {
-    return false;
+  if (formatChanged) {
+    m_pipeline.shutdown();
+    m_renderPass.shutdown();
+
+    if (!m_renderPass.init(m_device, presenter.imageFormat())) {
+      return false;
+    }
+
+    if (!m_pipeline.init(m_device, m_renderPass.handle(), presenter.extent(),
+                         vertSpvPath, fragSpvPath)) {
+      return false;
+    }
   }
 
   // Recreate framebuffers
@@ -197,11 +222,11 @@ bool Renderer::recreateSwapchainDependent(VkPresenter &presenter,
     return false;
   }
 
-  const uint32_t imageCount = presenter.imageCount();
-  m_commands.free();
-  if (!m_commands.allocate(imageCount)) {
-    return false;
-  }
+  // m_commands.free();
+  // if (!m_commands.allocate(imageCount)) {
+  //   return false;
+  // }
 
+  const uint32_t imageCount = presenter.imageCount();
   return m_frames.onSwapchainRecreated(imageCount);
 }
