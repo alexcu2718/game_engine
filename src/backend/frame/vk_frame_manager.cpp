@@ -58,7 +58,7 @@ bool VkFrameManager::createSyncObjects() {
 
     if (vkCreateFence(m_device, &fenceInfo, nullptr, &m_inFlightFences[i]) !=
         VK_SUCCESS) {
-      std::cerr << "[Frame] Failed to create inFligh fence\n";
+      std::cerr << "[Frame] Failed to create inFlight fence\n";
       return false;
     }
   }
