@@ -3,6 +3,8 @@ add_library(engine_render STATIC
     vk_framebuffers.cpp
     vk_pipeline.cpp
     vk_render_pass.cpp
+    camera.cpp
+    camera_controller.cpp
 )
 
 target_include_directories(engine_render
@@ -15,8 +17,8 @@ target_link_libraries(engine_render
         engine::frame
         engine::presentation
         Vulkan::Vulkan
-    PRIVATE
-        glm
+        glm::glm
+        glfw
 )
 
 add_library(engine::render ALIAS engine_render)

@@ -3,13 +3,14 @@
 #include "../frame/vk_commands.hpp"
 #include "../frame/vk_frame_manager.hpp"
 #include "../presentation/vk_presenter.hpp"
+#include "../resources/vk_depth_image.hpp"
+#include "../resources/vk_per_frame_uniform.hpp"
+#include "../resources/vk_uploader.hpp"
+#include "camera.hpp"
 #include "mesh_gpu.hpp"
-#include "vk_depth_image.hpp"
 #include "vk_framebuffers.hpp"
-#include "vk_per_frame_uniform.hpp"
 #include "vk_pipeline.hpp"
 #include "vk_render_pass.hpp"
-#include "vk_uploader.hpp"
 
 #include <cstdint>
 #include <string>
@@ -73,6 +74,8 @@ public:
                                   const std::string &vertSpvPath,
                                   const std::string &fragSpvPath);
 
+  void setCameraState(const Camera &cam) { m_cameraState = cam; }
+
 private:
   bool initTestGeometry();
   void recordFrame(VkCommandBuffer cmd, VkFramebuffer fb, VkExtent2D extent);
@@ -91,6 +94,7 @@ private:
   VkFrameManager m_frames;
 
   VkPerFrameUniform m_camera;
+  Camera m_cameraState;
 
   MeshGpu m_mesh;
   VkUploader m_uploader;

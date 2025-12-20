@@ -19,7 +19,7 @@ The focus of this game engine is to make a game playable on all devices with lit
 ## MVP 1
 
 - [x] Arbitrary 3d Meshes (2025-12-19)
-- [ ] Moveable Camera
+- [x] Moveable Camera
 - [ ] Textures
     - [ ] Albedos (start of PBR)
     - [ ] Diffuse option

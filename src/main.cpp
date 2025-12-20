@@ -2,8 +2,10 @@
 #include "backend/core/vk_instance.hpp"
 #include "backend/presentation/vk_presenter.hpp"
 #include "backend/render/renderer.hpp"
+#include "camera_controller.hpp"
 #include <GLFW/glfw3.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <iostream>
 #include <vector>
@@ -122,8 +124,23 @@ int main() {
     return 1;
   }
 
+  Camera camera;
+  CameraController controller(window, &camera);
+  controller.enableCursorCapture(true);
+
+  double lastTime = glfwGetTime();
+
   while (glfwWindowShouldClose(window) == GLFW_FALSE) {
     glfwPollEvents();
+
+    double now = glfwGetTime();
+    float dt = static_cast<float>(now - lastTime);
+    // dt = std::min(dt, 0.05F);
+    lastTime = now;
+
+    controller.update(dt);
+
+    renderer.setCameraState(camera);
 
     if (!renderer.drawFrame(presenter)) {
       std::cerr << "drawFrame failed\n";

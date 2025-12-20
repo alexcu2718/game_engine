@@ -1,8 +1,8 @@
 #include "renderer.hpp"
 #include "../presentation/vk_presenter.hpp"
+#include "../resources/vertex.hpp"
 #include "../resources/vk_buffer.hpp"
 #include "camera_ubo.hpp"
-#include "vertex.hpp"
 
 #include <array>
 #include <chrono>
@@ -380,20 +380,7 @@ bool Renderer::drawFrame(VkPresenter &presenter) {
   const uint32_t frameIndex = m_frames.currentFrameIndex();
 
   // Camera
-  // TODO: move this to its own class and make a controller too
-  CameraUBO ubo{};
-  ubo.view =
-      glm::lookAt(glm::vec3(2.0F, 2.0F, 2.0F), glm::vec3(0.0F, 0.0F, 0.0F),
-                  glm::vec3(0.0F, 0.0F, 1.0F));
-
-  const auto extent = presenter.extent();
-  const float width = static_cast<float>(extent.width);
-  const float height =
-      static_cast<float>(extent.height > 0 ? extent.height : 1U);
-  const float aspect = width / height;
-
-  ubo.proj = glm::perspective(glm::radians(60.0F), aspect, 0.1F, 100.0F);
-  ubo.proj[1][1] *= -1.0F; // Vulkan clip space
+  CameraUBO ubo = m_cameraState.makeUbo(presenter.extent());
 
   if (!m_camera.update(frameIndex, &ubo, sizeof(ubo))) {
     std::cerr << "[Renderer] Failed to update camera UBO\n";
