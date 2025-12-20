@@ -1,12 +1,12 @@
 #pragma once
 
+#include "../../engine/camera/camera_ubo.hpp"
 #include "../frame/vk_commands.hpp"
 #include "../frame/vk_frame_manager.hpp"
 #include "../presentation/vk_presenter.hpp"
 #include "../resources/vk_depth_image.hpp"
 #include "../resources/vk_per_frame_uniform.hpp"
 #include "../resources/vk_uploader.hpp"
-#include "camera.hpp"
 #include "mesh_gpu.hpp"
 #include "vk_framebuffers.hpp"
 #include "vk_pipeline.hpp"
@@ -74,7 +74,7 @@ public:
                                   const std::string &vertSpvPath,
                                   const std::string &fragSpvPath);
 
-  void setCameraState(const Camera &cam) { m_cameraState = cam; }
+  void setCameraUBO(const CameraUBO &ubo) { m_cameraUbo = ubo; }
 
 private:
   bool initTestGeometry();
@@ -94,7 +94,7 @@ private:
   VkFrameManager m_frames;
 
   VkPerFrameUniform m_camera;
-  Camera m_cameraState;
+  CameraUBO m_cameraUbo{};
 
   MeshGpu m_mesh;
   VkUploader m_uploader;

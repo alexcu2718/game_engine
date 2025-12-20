@@ -3,8 +3,6 @@ add_library(engine_render STATIC
     vk_framebuffers.cpp
     vk_pipeline.cpp
     vk_render_pass.cpp
-    camera.cpp
-    camera_controller.cpp
 )
 
 target_include_directories(engine_render

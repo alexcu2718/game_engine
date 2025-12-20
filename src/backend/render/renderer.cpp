@@ -1,8 +1,8 @@
 #include "renderer.hpp"
+#include "../../engine/camera/camera_ubo.hpp"
 #include "../presentation/vk_presenter.hpp"
 #include "../resources/vertex.hpp"
 #include "../resources/vk_buffer.hpp"
-#include "camera_ubo.hpp"
 
 #include <array>
 #include <chrono>
@@ -379,10 +379,7 @@ bool Renderer::drawFrame(VkPresenter &presenter) {
 
   const uint32_t frameIndex = m_frames.currentFrameIndex();
 
-  // Camera
-  CameraUBO ubo = m_cameraState.makeUbo(presenter.extent());
-
-  if (!m_camera.update(frameIndex, &ubo, sizeof(ubo))) {
+  if (!m_camera.update(frameIndex, &m_cameraUbo, sizeof(m_cameraUbo))) {
     std::cerr << "[Renderer] Failed to update camera UBO\n";
   }
 

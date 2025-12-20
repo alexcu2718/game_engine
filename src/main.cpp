@@ -2,10 +2,10 @@
 #include "backend/core/vk_instance.hpp"
 #include "backend/presentation/vk_presenter.hpp"
 #include "backend/render/renderer.hpp"
-#include "camera_controller.hpp"
+#include "engine/camera/camera.hpp"
+#include "platform/input/camera_controller.hpp"
 #include <GLFW/glfw3.h>
 
-#include <algorithm>
 #include <cstdint>
 #include <iostream>
 #include <vector>
@@ -14,7 +14,7 @@
 static void getFrameBufferSize(GLFWwindow *window, uint32_t &outWidth,
                                uint32_t &outHeight) {
   // Get size (in pixels) for swapchain extent
-  // TODO: Make this a helper function in vulkan_swapchain
+  // TODO: move this elsewhere
   int fbWidth = 0;
   int fbHeight = 0;
   glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
@@ -135,12 +135,11 @@ int main() {
 
     double now = glfwGetTime();
     float dt = static_cast<float>(now - lastTime);
-    // dt = std::min(dt, 0.05F);
     lastTime = now;
 
     controller.update(dt);
 
-    renderer.setCameraState(camera);
+    renderer.setCameraUBO(camera.makeUbo(presenter.extent()));
 
     if (!renderer.drawFrame(presenter)) {
       std::cerr << "drawFrame failed\n";

@@ -1,5 +1,5 @@
 #include "camera_controller.hpp"
-#include "camera.hpp"
+#include "../../engine/camera/camera.hpp"
 #include "glm/ext/vector_float3.hpp"
 #include <GLFW/glfw3.h>
 

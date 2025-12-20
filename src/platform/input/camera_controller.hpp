@@ -1,6 +1,6 @@
 #pragma once
 
-#include "camera.hpp"
+#include "../../engine/camera/camera.hpp"
 #include <GLFW/glfw3.h>
 
 class CameraController {

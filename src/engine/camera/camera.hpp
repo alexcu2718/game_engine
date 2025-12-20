@@ -4,7 +4,6 @@
 #include <glm/ext/vector_float3.hpp>
 #include <vulkan/vulkan_core.h>
 
-// TODO: split camera and camera controller into a camera directory
 class Camera {
 public:
   // World-space state
