@@ -1,24 +1,16 @@
-add_subdirectory(texture)
+add_subdirectory(buffers)
+add_subdirectory(descriptors)
+add_subdirectory(images)
+add_subdirectory(upload)
+add_subdirectory(textures)
 
-add_library(engine_resources STATIC 
-    vk_buffer.cpp
-    vk_uploader.cpp
-    vk_per_frame_uniform.cpp
-    vk_depth_image.cpp
-    vk_material_sets.cpp
-)
-
-target_include_directories(engine_resources
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}
-)
-
-target_link_libraries(engine_resources
-    PUBLIC
-        Vulkan::Vulkan
-        engine::resources::texture
-    PRIVATE
-        glm::glm
+add_library(engine_resources INTERFACE)
+target_link_libraries(engine_resources INTERFACE
+  engine::resources::buffers
+  engine::resources::descriptors
+  engine::resources::images
+  engine::resources::upload
+  engine::resources::textures
 )
 
 add_library(engine::resources ALIAS engine_resources)

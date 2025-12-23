@@ -6,12 +6,14 @@
 #include "../frame/vk_commands.hpp"
 #include "../frame/vk_frame_manager.hpp"
 #include "../presentation/vk_presenter.hpp"
-#include "../resources/texture/vk_texture.hpp"
-#include "../resources/texture/vk_texture_uploader.hpp"
-#include "../resources/vk_depth_image.hpp"
-#include "../resources/vk_material_sets.hpp"
-#include "../resources/vk_per_frame_uniform.hpp"
-#include "../resources/vk_uploader.hpp"
+#include "../resources/buffers/vk_per_frame_uniform_buffers.hpp"
+#include "../resources/descriptors/vk_material_sets.hpp"
+#include "../resources/descriptors/vk_per_frame_sets.hpp"
+#include "../resources/descriptors/vk_shader_interface.hpp"
+#include "../resources/images/vk_depth_image.hpp"
+#include "../resources/textures/vk_texture.hpp"
+#include "../resources/upload/vk_buffer_uploader.hpp"
+#include "../resources/upload/vk_texture_uploader.hpp"
 #include "mesh_gpu.hpp"
 #include "vk_framebuffers.hpp"
 #include "vk_pipeline.hpp"
@@ -59,10 +61,17 @@ public:
     m_commands = std::move(other.m_commands);
     m_frames = std::move(other.m_frames);
 
-    m_camera = std::move(other.m_camera);
+    // m_camera = std::move(other.m_camera);
+    m_interface = std::move(other.m_interface);
     m_cameraUbo = other.m_cameraUbo;
 
-    // TODO: add material
+    m_perFrameBufs = std::move(other.m_perFrameBufs);
+    m_perFrameSets = std::move(other.m_perFrameSets);
+
+    m_textureUploader = std::move(other.m_textureUploader);
+    m_textures = std::move(other.m_textures);
+    m_materials = std::move(other.m_materials);
+    m_activeMaterial = std::exchange(other.m_activeMaterial, UINT32_MAX);
 
     m_uploader = std::move(other.m_uploader);
     m_meshes = std::move(other.m_meshes);
@@ -120,7 +129,9 @@ private:
   VkCommands m_commands;
   VkFrameManager m_frames;
 
-  VkPerFrameUniform m_camera;
+  VkShaderInterface m_interface;
+  VkPerFrameUniformBuffers m_perFrameBufs;
+  VkPerFrameSets m_perFrameSets;
   CameraUBO m_cameraUbo{};
 
   std::vector<VkTexture2D> m_textures;
@@ -129,7 +140,7 @@ private:
   VkTextureUploader m_textureUploader;
 
   std::vector<MeshGpu> m_meshes;
-  VkUploader m_uploader;
+  VkBufferUploader m_uploader;
 
   VkRenderPassObj m_renderPass;
   VkGraphicsPipeline m_pipeline;

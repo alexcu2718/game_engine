@@ -1,28 +1,26 @@
 #pragma once
 
-#include "vk_texture.hpp"
-
 #include "../../frame/vk_commands.hpp"
 
-#include <cstdint>
+#include "../buffers/vk_buffer.hpp"
+
 #include <vulkan/vulkan_core.h>
 
-class VkTextureUploader {
+class VkBufferUploader {
 public:
+  VkBufferUploader() = default;
+
   bool init(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue queue,
             VkCommands *commands);
   void shutdown() noexcept;
 
-  bool uploadRGBA8(const void *rgbaPixels, uint32_t width, uint32_t height,
-                   VkTexture2D &out);
+  bool uploadToDeviceLocalBuffer(const void *data, VkDeviceSize size,
+                                 VkBufferUsageFlags finalUsage,
+                                 VkBufferObj &outBuffer);
 
 private:
   VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE; // non-owning
   VkDevice m_device = VK_NULL_HANDLE;                 // non-owning
   VkQueue m_queue = VK_NULL_HANDLE;                   // non-owning
   VkCommands *m_commands = nullptr;                   // non-owning
-
-  static void cmdTransitionImage(VkCommandBuffer cmd, VkImage image,
-                                 VkImageLayout oldLayout,
-                                 VkImageLayout newLayout);
 };

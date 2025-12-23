@@ -1,4 +1,5 @@
 #include "vk_pipeline.hpp"
+
 #include "../resources/vk_vertex_layout.hpp"
 #include "../shaders/vk_shader.hpp"
 
@@ -10,10 +11,17 @@
 #include <vulkan/vulkan_core.h>
 
 bool VkGraphicsPipeline::init(VkDevice device, VkRenderPass renderPass,
-                              VkExtent2D extent, const std::string &vertSpvPath,
+                              VkExtent2D extent,
+                              VkPipelineLayout pipelineLayout,
+                              const std::string &vertSpvPath,
                               const std::string &fragSpvPath) {
   if (device == VK_NULL_HANDLE || renderPass == VK_NULL_HANDLE) {
     std::cerr << "[Pipeline] Device or render pass not initialized\n";
+    return false;
+  }
+
+  if (pipelineLayout == VK_NULL_HANDLE) {
+    std::cerr << "[Pipeline] pipelineLayout is null\n";
     return false;
   }
 
@@ -51,14 +59,9 @@ bool VkGraphicsPipeline::init(VkDevice device, VkRenderPass renderPass,
   fragStage.module = fragModule.m_handle;
   fragStage.pName = "main";
 
-  if (!createPipelineLayout()) {
-    shutdown();
-    return false;
-  }
-
   const std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages{vertStage,
                                                                     fragStage};
-  if (!createGraphicsPipeline(renderPass, shaderStages.data(),
+  if (!createGraphicsPipeline(renderPass, pipelineLayout, shaderStages.data(),
                               static_cast<uint32_t>(shaderStages.size()))) {
     shutdown();
     return false;
@@ -68,74 +71,9 @@ bool VkGraphicsPipeline::init(VkDevice device, VkRenderPass renderPass,
   return true;
 }
 
-bool VkGraphicsPipeline::createPipelineLayout() {
-  // Set 0: per frame UBO (for camera)
-  VkDescriptorSetLayoutBinding uboBinding{};
-  uboBinding.binding = 0;
-  uboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-  uboBinding.descriptorCount = 1;
-  uboBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-
-  VkDescriptorSetLayoutCreateInfo cameraLayoutInfo{};
-  cameraLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-  cameraLayoutInfo.bindingCount = 1;
-  cameraLayoutInfo.pBindings = &uboBinding;
-
-  if (vkCreateDescriptorSetLayout(m_device, &cameraLayoutInfo, nullptr,
-                                  &m_setLayoutCamera) != VK_SUCCESS) {
-    std::cerr << "[Pipeline] Failed to create camera descriptor set layout\n";
-    return false;
-  }
-
-  // Set 1: Material Texture
-  VkDescriptorSetLayoutBinding textureBinding{};
-  textureBinding.binding = 0;
-  textureBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-  textureBinding.descriptorCount = 1;
-  textureBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-  VkDescriptorSetLayoutCreateInfo materialLayoutInfo{};
-  materialLayoutInfo.sType =
-      VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-  materialLayoutInfo.bindingCount = 1;
-  materialLayoutInfo.pBindings = &textureBinding;
-
-  if (vkCreateDescriptorSetLayout(m_device, &materialLayoutInfo, nullptr,
-                                  &m_setLayoutMaterial) != VK_SUCCESS) {
-    std::cerr << "[Pipeline] Failed to create texture descriptor set layout\n";
-    return false;
-  }
-
-  // Push constant (mode matrix)
-  VkPushConstantRange pushRange{};
-  pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-  pushRange.offset = 0;
-  pushRange.size = sizeof(glm::mat4);
-
-  std::array<VkDescriptorSetLayout, 2> setLayouts = {m_setLayoutCamera,
-                                                     m_setLayoutMaterial};
-
-  VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-  pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-  pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(setLayouts.size());
-  pipelineLayoutInfo.pSetLayouts = setLayouts.data();
-  pipelineLayoutInfo.pushConstantRangeCount = 1;
-  pipelineLayoutInfo.pPushConstantRanges = &pushRange;
-
-  const VkResult res = vkCreatePipelineLayout(m_device, &pipelineLayoutInfo,
-                                              nullptr, &m_pipelineLayout);
-  if (res != VK_SUCCESS) {
-    std::cerr << "[Pipeline] vkCreatePipelineLayout failed: " << res << "\n";
-    m_pipelineLayout = VK_NULL_HANDLE;
-    return false;
-  }
-
-  return true;
-}
-
 bool VkGraphicsPipeline::createGraphicsPipeline(
-    VkRenderPass renderPass, const VkPipelineShaderStageCreateInfo *stages,
-    uint32_t stageCount) {
+    VkRenderPass renderPass, VkPipelineLayout pipelineLayout,
+    const VkPipelineShaderStageCreateInfo *stages, uint32_t stageCount) {
   VkVertexInputBindingDescription binding =
       vk_vertex_layout::bindingDescription();
   auto attributes = vk_vertex_layout::attributeDescriptions();
@@ -226,7 +164,7 @@ bool VkGraphicsPipeline::createGraphicsPipeline(
   pipelineInfo.pDepthStencilState = &depth;
   pipelineInfo.pColorBlendState = &colorBlending;
   pipelineInfo.pDynamicState = &dynamicState;
-  pipelineInfo.layout = m_pipelineLayout;
+  pipelineInfo.layout = pipelineLayout;
   pipelineInfo.renderPass = renderPass;
   pipelineInfo.subpass = 0;
   pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
@@ -246,26 +184,11 @@ bool VkGraphicsPipeline::createGraphicsPipeline(
 
 void VkGraphicsPipeline::shutdown() noexcept {
   if (m_device != VK_NULL_HANDLE) {
-    if (m_setLayoutCamera != VK_NULL_HANDLE) {
-      vkDestroyDescriptorSetLayout(m_device, m_setLayoutCamera, nullptr);
-    }
-
-    if (m_setLayoutMaterial != VK_NULL_HANDLE) {
-      vkDestroyDescriptorSetLayout(m_device, m_setLayoutMaterial, nullptr);
-    }
-
     if (m_graphicsPipeline != VK_NULL_HANDLE) {
       vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
     }
-
-    if (m_pipelineLayout != VK_NULL_HANDLE) {
-      vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
-    }
   }
 
-  m_setLayoutCamera = VK_NULL_HANDLE;
-  m_setLayoutMaterial = VK_NULL_HANDLE;
   m_graphicsPipeline = VK_NULL_HANDLE;
-  m_pipelineLayout = VK_NULL_HANDLE;
   m_device = VK_NULL_HANDLE;
 }

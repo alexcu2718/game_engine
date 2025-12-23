@@ -1,27 +1,10 @@
-
 #include "vk_image.hpp"
+
+#include "../buffers/vk_memory_utils.hpp"
+
 #include <cstdint>
 #include <iostream>
 #include <vulkan/vulkan_core.h>
-
-// TODO: make util helper so vk_buffer can also share
-static bool findMemoryTypeIndex(VkPhysicalDevice physicalDevice,
-                                uint32_t typeBits, VkMemoryPropertyFlags props,
-                                uint32_t &outIndex) {
-  VkPhysicalDeviceMemoryProperties memoryProperties{};
-  vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
-
-  for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i) {
-    const bool typeOk = (typeBits & (1U << i)) != 0;
-    const bool propsOk =
-        (memoryProperties.memoryTypes[i].propertyFlags & props) == props;
-    if (typeOk && propsOk) {
-      outIndex = i;
-      return true;
-    }
-  }
-  return false;
-}
 
 bool VkImageObj::init2D(VkPhysicalDevice physicalDevice, VkDevice device,
                         uint32_t width, uint32_t height, VkFormat format,
@@ -65,8 +48,8 @@ bool VkImageObj::init2D(VkPhysicalDevice physicalDevice, VkDevice device,
   vkGetImageMemoryRequirements(m_device, m_image, &memReq);
 
   uint32_t memIndex = 0;
-  if (!findMemoryTypeIndex(physicalDevice, memReq.memoryTypeBits, memProps,
-                           memIndex)) {
+  if (!vkFindMemoryTypeIndex(physicalDevice, memReq.memoryTypeBits, memProps,
+                             memIndex)) {
     std::cerr << "[Image] No suitable memory type\n";
     shutdown();
     return false;

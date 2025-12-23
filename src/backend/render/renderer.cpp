@@ -1,10 +1,9 @@
 #include "renderer.hpp"
 
 #include "../../engine/assets/stb_image_loader.hpp"
-#include "../../engine/camera/camera_ubo.hpp"
 #include "../../engine/mesh/vertex.hpp"
 #include "../presentation/vk_presenter.hpp"
-#include "../resources/vk_buffer.hpp"
+#include "../resources/buffers/vk_buffer.hpp"
 #include "mesh_gpu.hpp"
 
 #include <array>
@@ -65,9 +64,16 @@ bool Renderer::init(VkPhysicalDevice physicalDevice, VkDevice device,
     return false;
   }
 
+  // Create shader interface
+  if (!m_interface.init(m_device)) {
+    std::cerr << "[Renderer] Failed to create shader interface\n";
+    shutdown();
+    return false;
+  }
+
   // Create graphics pipeline
   if (!m_pipeline.init(m_device, m_renderPass.handle(), presenter.extent(),
-                       m_vertPath, m_fragPath)) {
+                       m_interface.pipelineLayout(), m_vertPath, m_fragPath)) {
     std::cerr << "[Renderer] Failed to create graphics pipeline\n";
     shutdown();
     return false;
@@ -89,9 +95,15 @@ bool Renderer::init(VkPhysicalDevice physicalDevice, VkDevice device,
     return false;
   }
 
-  // Create camera
-  if (!m_camera.init(m_physicalDevice, m_device, m_pipeline.setLayoutCamera(),
-                     m_framesInFlight, sizeof(CameraUBO))) {
+  if (!m_perFrameBufs.init(m_physicalDevice, m_device, m_framesInFlight,
+                           sizeof(CameraUBO))) {
+    std::cerr << "[Renderer] Failed to init camera UBO\n";
+    shutdown();
+    return false;
+  }
+
+  if (!m_perFrameSets.init(m_device, m_interface.setLayoutPerFrame(),
+                           m_perFrameBufs)) {
     std::cerr << "[Renderer] Failed to init camera UBO\n";
     shutdown();
     return false;
@@ -111,7 +123,7 @@ bool Renderer::init(VkPhysicalDevice physicalDevice, VkDevice device,
     return false;
   }
 
-  if (!m_materials.init(m_device, m_pipeline.setLayoutMaterial(), 128)) {
+  if (!m_materials.init(m_device, m_interface.setLayoutMaterial(), 128)) {
     std::cerr << "[Renderer] Failed to init material sets\n";
     shutdown();
     return false;
@@ -150,7 +162,10 @@ void Renderer::shutdown() noexcept {
   m_meshes.clear();
 
   m_uploader.shutdown();
-  m_camera.shutdown();
+  m_interface.shutdown();
+
+  m_perFrameSets.shutdown();
+  m_perFrameBufs.shutdown();
 
   for (auto &texture : m_textures) {
     texture.shutdown();
@@ -247,9 +262,10 @@ void Renderer::recordFrame(VkCommandBuffer cmd, VkFramebuffer fb,
   vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                     m_pipeline.pipeline());
 
-  m_camera.bind(cmd, m_pipeline.layout(), 0, m_frames.currentFrameIndex());
+  m_perFrameSets.bind(cmd, m_interface.pipelineLayout(), 0,
+                      m_frames.currentFrameIndex());
   if (m_activeMaterial != UINT32_MAX) {
-    m_materials.bind(cmd, m_pipeline.layout(), 1, m_activeMaterial);
+    m_materials.bind(cmd, m_interface.pipelineLayout(), 1, m_activeMaterial);
   }
 
   // Push constant (model matrix)
@@ -258,8 +274,8 @@ void Renderer::recordFrame(VkCommandBuffer cmd, VkFramebuffer fb,
   // TODO REMOVE
   model = glm::rotate(model, m_timeSeconds, glm::vec3(0.0F, 0.0F, 1.0F));
 
-  vkCmdPushConstants(cmd, m_pipeline.layout(), VK_SHADER_STAGE_VERTEX_BIT, 0,
-                     sizeof(glm::mat4), &model);
+  vkCmdPushConstants(cmd, m_interface.pipelineLayout(),
+                     VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &model);
 
   // Viewport / scissor
   VkViewport viewport{};
@@ -299,10 +315,10 @@ bool Renderer::drawFrame(VkPresenter &presenter, MeshHandle mesh) {
   }
 
   // TODO REMOVE
-  // static auto start = std::chrono::steady_clock::now();
-  // auto now = std::chrono::steady_clock::now();
-  // std::chrono::duration<float> dt = now - start;
-  // m_timeSeconds = dt.count();
+  static auto start = std::chrono::steady_clock::now();
+  auto now = std::chrono::steady_clock::now();
+  std::chrono::duration<float> dt = now - start;
+  m_timeSeconds = dt.count();
 
   using FrameStatus = VkFrameManager::FrameStatus;
 
@@ -319,7 +335,7 @@ bool Renderer::drawFrame(VkPresenter &presenter, MeshHandle mesh) {
 
   const uint32_t frameIndex = m_frames.currentFrameIndex();
 
-  if (!m_camera.update(frameIndex, &m_cameraUbo, sizeof(m_cameraUbo))) {
+  if (!m_perFrameBufs.update(frameIndex, &m_cameraUbo, sizeof(m_cameraUbo))) {
     std::cerr << "[Renderer] Failed to update camera UBO\n";
   }
 
@@ -387,7 +403,8 @@ bool Renderer::recreateSwapchainDependent(VkPresenter &presenter,
     }
 
     if (!m_pipeline.init(m_device, m_renderPass.handle(), presenter.extent(),
-                         vertSpvPath, fragSpvPath)) {
+                         m_interface.pipelineLayout(), vertSpvPath,
+                         fragSpvPath)) {
       return false;
     }
   }

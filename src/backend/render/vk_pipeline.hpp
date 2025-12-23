@@ -24,7 +24,6 @@ public:
     shutdown();
 
     m_device = std::exchange(other.m_device, VK_NULL_HANDLE);
-    m_pipelineLayout = std::exchange(other.m_pipelineLayout, VK_NULL_HANDLE);
     m_graphicsPipeline =
         std::exchange(other.m_graphicsPipeline, VK_NULL_HANDLE);
 
@@ -32,36 +31,22 @@ public:
   }
 
   bool init(VkDevice device, VkRenderPass renderPass, VkExtent2D extent,
-            const std::string &vertSpvPath, const std::string &fragSpvPath);
+            VkPipelineLayout pipelineLayout, const std::string &vertSpvPath,
+            const std::string &fragSpvPath);
   void shutdown() noexcept;
 
   [[nodiscard]] VkPipeline pipeline() const noexcept {
     return m_graphicsPipeline;
   }
-  [[nodiscard]] VkPipelineLayout layout() const noexcept {
-    return m_pipelineLayout;
-  }
   [[nodiscard]] bool valid() const noexcept {
-    return m_pipelineLayout != VK_NULL_HANDLE;
-  }
-  [[nodiscard]] VkDescriptorSetLayout setLayoutCamera() const noexcept {
-    return m_setLayoutCamera;
-  }
-  [[nodiscard]] VkDescriptorSetLayout setLayoutMaterial() const noexcept {
-    return m_setLayoutMaterial;
+    return m_graphicsPipeline != VK_NULL_HANDLE;
   }
 
 private:
-  [[nodiscard]] bool createPipelineLayout();
-  [[nodiscard]] bool
-  createGraphicsPipeline(VkRenderPass renderPass,
-                         const VkPipelineShaderStageCreateInfo *stages,
-                         uint32_t stageCount);
+  [[nodiscard]] bool createGraphicsPipeline(
+      VkRenderPass renderPass, VkPipelineLayout pipelineLayout,
+      const VkPipelineShaderStageCreateInfo *stages, uint32_t stageCount);
 
-  VkDevice m_device = VK_NULL_HANDLE;                 // non-owning
-  VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE; // owning
-  VkPipeline m_graphicsPipeline = VK_NULL_HANDLE;     // owning
-
-  VkDescriptorSetLayout m_setLayoutCamera = VK_NULL_HANDLE;   // owning
-  VkDescriptorSetLayout m_setLayoutMaterial = VK_NULL_HANDLE; // owning
+  VkDevice m_device = VK_NULL_HANDLE;             // non-owning
+  VkPipeline m_graphicsPipeline = VK_NULL_HANDLE; // owning
 };

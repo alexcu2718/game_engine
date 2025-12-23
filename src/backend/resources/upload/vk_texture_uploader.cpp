@@ -1,7 +1,8 @@
 #include "vk_texture_uploader.hpp"
-#include "../vk_buffer.hpp"
-#include "vk_texture.hpp"
-#include "vk_texture_utils.hpp"
+
+#include "../buffers/vk_buffer.hpp"
+#include "../textures/vk_texture.hpp"
+#include "../textures/vk_texture_utils.hpp"
 
 #include <cstdint>
 #include <iostream>

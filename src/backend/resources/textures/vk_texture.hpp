@@ -1,6 +1,6 @@
 #pragma once
 
-#include "vk_image.hpp"
+#include "../images/vk_image.hpp"
 
 #include <vulkan/vulkan_core.h>
 

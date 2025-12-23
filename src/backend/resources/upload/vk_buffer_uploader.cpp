@@ -1,10 +1,10 @@
-#include "vk_uploader.hpp"
+#include "vk_buffer_uploader.hpp"
 
 #include <iostream>
 #include <vulkan/vulkan_core.h>
 
-bool VkUploader::init(VkPhysicalDevice physicalDevice, VkDevice device,
-                      VkQueue queue, VkCommands *commands) {
+bool VkBufferUploader::init(VkPhysicalDevice physicalDevice, VkDevice device,
+                            VkQueue queue, VkCommands *commands) {
   if (physicalDevice == VK_NULL_HANDLE || device == VK_NULL_HANDLE ||
       queue == VK_NULL_HANDLE || commands == nullptr) {
     std::cerr << "[Uploader] Invalid init args\n";
@@ -19,16 +19,17 @@ bool VkUploader::init(VkPhysicalDevice physicalDevice, VkDevice device,
   return true;
 }
 
-void VkUploader::shutdown() noexcept {
+void VkBufferUploader::shutdown() noexcept {
   m_physicalDevice = VK_NULL_HANDLE;
   m_device = VK_NULL_HANDLE;
   m_queue = VK_NULL_HANDLE;
   m_commands = nullptr;
 }
 
-bool VkUploader::uploadToDeviceLocalBuffer(const void *data, VkDeviceSize size,
-                                           VkBufferUsageFlags finalUsage,
-                                           VkBufferObj &outBuffer) {
+bool VkBufferUploader::uploadToDeviceLocalBuffer(const void *data,
+                                                 VkDeviceSize size,
+                                                 VkBufferUsageFlags finalUsage,
+                                                 VkBufferObj &outBuffer) {
   if (m_device == VK_NULL_HANDLE || m_physicalDevice == VK_NULL_HANDLE ||
       m_queue == VK_NULL_HANDLE || m_commands == nullptr) {
     std::cerr << "[Uploader] Not initialized\n";

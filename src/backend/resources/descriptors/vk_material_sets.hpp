@@ -1,6 +1,6 @@
 #pragma once
 
-#include "texture/vk_texture.hpp"
+#include "../textures/vk_texture.hpp"
 
 #include <cstdint>
 #include <utility>
