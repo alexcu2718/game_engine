@@ -34,8 +34,8 @@ bool VkPerFrameUniform::init(VkPhysicalDevice physicalDevice, VkDevice device,
   poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
   poolSize.descriptorCount = framesInFlight;
 
-  VkDescriptorPoolCreateInfo poolInfo{
-      VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+  VkDescriptorPoolCreateInfo poolInfo{};
+  poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
   poolInfo.maxSets = framesInFlight;
   poolInfo.poolSizeCount = 1;
   poolInfo.pPoolSizes = &poolSize;
@@ -50,8 +50,8 @@ bool VkPerFrameUniform::init(VkPhysicalDevice physicalDevice, VkDevice device,
   // Descriptor sets
   std::vector<VkDescriptorSetLayout> layouts(framesInFlight, layout);
 
-  VkDescriptorSetAllocateInfo allocInfo{
-      VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+  VkDescriptorSetAllocateInfo allocInfo{};
+  allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
   allocInfo.descriptorPool = m_pool;
   allocInfo.descriptorSetCount = framesInFlight;
   allocInfo.pSetLayouts = layouts.data();
@@ -71,7 +71,8 @@ bool VkPerFrameUniform::init(VkPhysicalDevice physicalDevice, VkDevice device,
     bufferInfo.offset = 0;
     bufferInfo.range = m_stride;
 
-    VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    VkWriteDescriptorSet write{};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write.dstSet = m_sets[i];
     write.dstBinding = 0;
     write.descriptorCount = 1;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../resources/vk_buffer.hpp"
+
 #include <vulkan/vulkan_core.h>
 
 struct MeshGpu {

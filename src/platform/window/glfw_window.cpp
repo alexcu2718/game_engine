@@ -50,16 +50,6 @@ bool GlfwWindow::shouldClose() const noexcept {
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 void GlfwWindow::pollEvents() const noexcept { glfwPollEvents(); }
 
-// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
-std::vector<const char *> GlfwWindow::requiredVulkanExtensions() {
-  uint32_t count = 0;
-  const char **exts = glfwGetRequiredInstanceExtensions(&count);
-  if (exts == nullptr || count == 0) {
-    std::cerr << "glfwGetRequiredInstanceExtensions returned nothing\n";
-  }
-  return {exts, exts + count};
-}
-
 void GlfwWindow::framebufferSize(uint32_t &outWidth,
                                  uint32_t &outHeight) const {
   // Get size (in pixels) for swapchain extent
@@ -79,4 +69,14 @@ void GlfwWindow::framebufferSize(uint32_t &outWidth,
 
   outWidth = fbWidth > 0 ? static_cast<uint32_t>(fbWidth) : 1U;
   outHeight = fbHeight > 0 ? static_cast<uint32_t>(fbHeight) : 1U;
+}
+
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+std::vector<const char *> GlfwWindow::requiredVulkanExtensions() {
+  uint32_t count = 0;
+  const char **exts = glfwGetRequiredInstanceExtensions(&count);
+  if (exts == nullptr || count == 0) {
+    std::cerr << "glfwGetRequiredInstanceExtensions returned nothing\n";
+  }
+  return {exts, exts + count};
 }

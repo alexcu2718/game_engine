@@ -25,16 +25,21 @@ MeshData square() {
   MeshData m;
   m.vertices = {
       engine::Vertex{.pos = glm::vec3{-0.5F, -0.5F, 0.0F},
-                     .color = glm::vec3{1.0F, 0.0F, 0.0F}},
+                     .color = glm::vec3{1.0F, 0.0F, 0.0F},
+                     .uv = glm::vec2{0.0F, 0.0F}},
       engine::Vertex{.pos = glm::vec3{0.5F, -0.5F, 0.0F},
-                     .color = glm::vec3{0.0F, 1.0F, 0.0F}},
+                     .color = glm::vec3{0.0F, 1.0F, 0.0F},
+                     .uv = glm::vec2{1.0F, 0.0F}},
       engine::Vertex{.pos = glm::vec3{0.5F, 0.5F, 0.0F},
-                     .color = glm::vec3{0.0F, 0.0F, 1.0F}},
+                     .color = glm::vec3{0.0F, 0.0F, 1.0F},
+                     .uv = glm::vec2{1.0F, 1.0F}},
       engine::Vertex{.pos = glm::vec3{-0.5F, 0.5F, 0.0F},
-                     .color = glm::vec3{1.0F, 1.0F, 0.0F}},
+                     .color = glm::vec3{1.0F, 1.0F, 0.0F},
+                     .uv = glm::vec2{0.0F, 1.0F}},
   };
 
   m.indices = {0U, 1U, 2U, 2U, 3U, 0U};
+
   return m;
 }
 

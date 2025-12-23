@@ -16,7 +16,6 @@ target_link_libraries(engine_render
         engine::presentation
         Vulkan::Vulkan
         glm::glm
-        glfw
 )
 
 add_library(engine::render ALIAS engine_render)

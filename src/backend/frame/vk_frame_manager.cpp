@@ -40,8 +40,10 @@ void VkFrameManager::shutdown() noexcept {
 }
 
 bool VkFrameManager::createSyncObjects() {
-  VkSemaphoreCreateInfo semInfo{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
-  VkFenceCreateInfo fenceInfo{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+  VkSemaphoreCreateInfo semInfo{};
+  semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+  VkFenceCreateInfo fenceInfo{};
+  fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
   fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
   m_imageAvailable.assign(m_framesInFlight, VK_NULL_HANDLE);
@@ -176,7 +178,8 @@ VkFrameManager::submitAndPresent(VkQueue queue, VkSwapchainKHR swapchain,
   VkSemaphore signalSem = m_renderFinished[imageIndex];
   VkFence frameFence = m_inFlightFences[m_currentFrame];
 
-  VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
+  VkSubmitInfo submit{};
+  submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
   submit.waitSemaphoreCount = 1;
   submit.pWaitSemaphores = &waitSem;
   submit.pWaitDstStageMask = &waitStage;
@@ -191,7 +194,8 @@ VkFrameManager::submitAndPresent(VkQueue queue, VkSwapchainKHR swapchain,
     return FrameStatus::Error;
   }
 
-  VkPresentInfoKHR present{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
+  VkPresentInfoKHR present{};
+  present.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
   present.waitSemaphoreCount = 1;
   present.pWaitSemaphores = &signalSem;
   present.swapchainCount = 1;
@@ -205,11 +209,12 @@ VkFrameManager::submitAndPresent(VkQueue queue, VkSwapchainKHR swapchain,
     return FrameStatus::OutOfDate;
   }
 
+  static bool suboptimal_logged = false;
+
   if (pres == VK_SUBOPTIMAL_KHR) {
-    static bool logged = false;
-    if (!logged) {
+    if (!suboptimal_logged) {
       std::cerr << "[Frame] vkQueuePresentKHR returned SUBOPTIMAL\n";
-      logged = true;
+      suboptimal_logged = true;
     }
 
     m_currentFrame = (m_currentFrame + 1) % m_framesInFlight;
@@ -221,8 +226,7 @@ VkFrameManager::submitAndPresent(VkQueue queue, VkSwapchainKHR swapchain,
     return FrameStatus::Error;
   }
 
-  static bool logged = false;
-  logged = false;
+  suboptimal_logged = false;
   m_currentFrame = (m_currentFrame + 1) % m_framesInFlight;
   return FrameStatus::Ok;
 }
@@ -238,7 +242,8 @@ bool VkFrameManager::onSwapchainRecreated(uint32_t newSwapchainImageCount) {
     }
   }
 
-  VkSemaphoreCreateInfo semInfo{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+  VkSemaphoreCreateInfo semInfo{};
+  semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
   m_swapchainImageCount = newSwapchainImageCount;
   m_renderFinished.assign(m_swapchainImageCount, VK_NULL_HANDLE);

@@ -17,9 +17,9 @@ inline VkVertexInputBindingDescription bindingDescription() {
   return binding;
 }
 
-inline std::array<VkVertexInputAttributeDescription, 2>
+inline std::array<VkVertexInputAttributeDescription, 3>
 attributeDescriptions() {
-  std::array<VkVertexInputAttributeDescription, 2> attrs{};
+  std::array<VkVertexInputAttributeDescription, 3> attrs{};
 
   // Location 0 -> vec3 position
   attrs[0].location = 0;
@@ -32,6 +32,12 @@ attributeDescriptions() {
   attrs[1].binding = 0;
   attrs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
   attrs[1].offset = offsetof(engine::Vertex, color);
+
+  // Location 2 -> vec2 uv
+  attrs[2].location = 2;
+  attrs[2].binding = 0;
+  attrs[2].format = VK_FORMAT_R32G32_SFLOAT;
+  attrs[2].offset = offsetof(engine::Vertex, uv);
 
   return attrs;
 }

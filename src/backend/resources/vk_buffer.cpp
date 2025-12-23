@@ -36,7 +36,8 @@ bool VkBufferObj::init(VkPhysicalDevice physicalDevice, VkDevice device,
   shutdown();
   m_device = device;
 
-  VkBufferCreateInfo bufferInfo{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+  VkBufferCreateInfo bufferInfo{};
+  bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
   bufferInfo.size = size;
   bufferInfo.usage = usage;
   bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -59,7 +60,8 @@ bool VkBufferObj::init(VkPhysicalDevice physicalDevice, VkDevice device,
     return false;
   }
 
-  VkMemoryAllocateInfo allocateInfo{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+  VkMemoryAllocateInfo allocateInfo{};
+  allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
   allocateInfo.allocationSize = memReq.size;
   allocateInfo.memoryTypeIndex = memIndex;
 

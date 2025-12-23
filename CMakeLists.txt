@@ -4,26 +4,19 @@ project(GameEngine LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-include(FetchContent)
-
-# GLFW3
-FetchContent_Declare(
-  glfw 
-  GIT_REPOSITORY https://github.com/glfw/glfw.git
-  GIT_TAG 3.4
-)
-FetchContent_MakeAvailable(glfw)
-
-# GLM
-FetchContent_Declare(
-  glm 
-  GIT_REPOSITORY https://github.com/g-truc/glm.git
-  GIT_TAG 1.0.2
-)
-FetchContent_MakeAvailable(glm)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Vulkan REQUIRED)
+
+add_compile_options(
+  $<$<COMPILE_LANGUAGE:CXX>:-Wall>
+  $<$<COMPILE_LANGUAGE:CXX>:-Wextra>
+  $<$<COMPILE_LANGUAGE:CXX>:-Wpedantic>
+  $<$<COMPILE_LANGUAGE:CXX>:-pedantic-errors>
+  $<$<COMPILE_LANGUAGE:CXX>:-Wshadow>
+  $<$<COMPILE_LANGUAGE:CXX>:-Wc99-designator>
+  $<$<COMPILE_LANGUAGE:CXX>:-Werror=c99-designator>
+)
 
 add_subdirectory(src)
 

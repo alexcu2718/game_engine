@@ -1,11 +1,15 @@
 #pragma once
 
+#include "../../engine/assets/image_data.hpp"
 #include "../../engine/camera/camera_ubo.hpp"
 #include "../../engine/mesh/vertex.hpp"
 #include "../frame/vk_commands.hpp"
 #include "../frame/vk_frame_manager.hpp"
 #include "../presentation/vk_presenter.hpp"
+#include "../resources/texture/vk_texture.hpp"
+#include "../resources/texture/vk_texture_uploader.hpp"
 #include "../resources/vk_depth_image.hpp"
+#include "../resources/vk_material_sets.hpp"
 #include "../resources/vk_per_frame_uniform.hpp"
 #include "../resources/vk_uploader.hpp"
 #include "mesh_gpu.hpp"
@@ -23,6 +27,10 @@ class VkPresenter;
 
 struct MeshHandle {
   uint32_t id = 0;
+};
+
+struct TextureHandle {
+  uint32_t id = UINT32_MAX;
 };
 
 class Renderer {
@@ -53,6 +61,8 @@ public:
 
     m_camera = std::move(other.m_camera);
     m_cameraUbo = other.m_cameraUbo;
+
+    // TODO: add material
 
     m_uploader = std::move(other.m_uploader);
     m_meshes = std::move(other.m_meshes);
@@ -87,6 +97,12 @@ public:
 
   void setCameraUBO(const CameraUBO &ubo) { m_cameraUbo = ubo; }
 
+  bool createTextureFromImage(const engine::ImageData &img,
+                              VkTexture2D &outTex);
+  TextureHandle createTextureFromFile(const std::string &path, bool flipY);
+  uint32_t createMaterialFromTexture(TextureHandle textureHandle);
+  void setActiveMaterial(uint32_t materialIndex);
+
 private:
   void recordFrame(VkCommandBuffer cmd, VkFramebuffer fb, VkExtent2D extent,
                    const MeshGpu &mesh);
@@ -106,6 +122,11 @@ private:
 
   VkPerFrameUniform m_camera;
   CameraUBO m_cameraUbo{};
+
+  std::vector<VkTexture2D> m_textures;
+  VkMaterialSets m_materials;
+  uint32_t m_activeMaterial = UINT32_MAX;
+  VkTextureUploader m_textureUploader;
 
   std::vector<MeshGpu> m_meshes;
   VkUploader m_uploader;

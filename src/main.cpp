@@ -92,10 +92,14 @@ int main() {
 
   double lastTime = glfwGetTime();
 
-  auto cubeCpu = engine::primitives::cube();
+  auto cubeCpu = engine::primitives::square();
   auto cubeGpu = renderer.createMesh(
       cubeCpu.vertices.data(), (uint32_t)cubeCpu.vertices.size(),
       cubeCpu.indices.data(), (uint32_t)cubeCpu.indices.size());
+
+  auto texture = renderer.createTextureFromFile("assets/texture.jpg", true);
+  uint32_t material = renderer.createMaterialFromTexture(texture);
+  renderer.setActiveMaterial(material);
 
   // TODO: abstract main loop from main and only keep camera and controller
   while (!window.shouldClose()) {

@@ -1,5 +1,6 @@
 #include "renderer.hpp"
 
+#include "../../engine/assets/stb_image_loader.hpp"
 #include "../../engine/camera/camera_ubo.hpp"
 #include "../../engine/mesh/vertex.hpp"
 #include "../presentation/vk_presenter.hpp"
@@ -7,7 +8,6 @@
 #include "mesh_gpu.hpp"
 
 #include <array>
-#include <chrono>
 #include <cstdint>
 #include <glm/ext/matrix_float4x4.hpp>
 #include <glm/ext/vector_float3.hpp>
@@ -90,9 +90,8 @@ bool Renderer::init(VkPhysicalDevice physicalDevice, VkDevice device,
   }
 
   // Create camera
-  if (!m_camera.init(m_physicalDevice, m_device,
-                     m_pipeline.descriptorSetLayout(), m_framesInFlight,
-                     sizeof(CameraUBO))) {
+  if (!m_camera.init(m_physicalDevice, m_device, m_pipeline.setLayoutCamera(),
+                     m_framesInFlight, sizeof(CameraUBO))) {
     std::cerr << "[Renderer] Failed to init camera UBO\n";
     shutdown();
     return false;
@@ -101,6 +100,19 @@ bool Renderer::init(VkPhysicalDevice physicalDevice, VkDevice device,
   if (!m_uploader.init(m_physicalDevice, m_device, m_graphicsQueue,
                        &m_commands)) {
     std::cerr << "[Renderer] Failed to init uploader\n";
+    shutdown();
+    return false;
+  }
+
+  if (!m_textureUploader.init(m_physicalDevice, m_device, m_graphicsQueue,
+                              &m_commands)) {
+    std::cerr << "[Renderer] Failed to init texture uploader\n";
+    shutdown();
+    return false;
+  }
+
+  if (!m_materials.init(m_device, m_pipeline.setLayoutMaterial(), 128)) {
+    std::cerr << "[Renderer] Failed to init material sets\n";
     shutdown();
     return false;
   }
@@ -139,6 +151,14 @@ void Renderer::shutdown() noexcept {
 
   m_uploader.shutdown();
   m_camera.shutdown();
+
+  for (auto &texture : m_textures) {
+    texture.shutdown();
+  }
+  m_textures.clear();
+
+  m_textureUploader.shutdown();
+  m_materials.shutdown();
 
   m_commands.shutdown();
 
@@ -205,8 +225,8 @@ const MeshGpu *Renderer::mesh(MeshHandle handle) const {
 
 void Renderer::recordFrame(VkCommandBuffer cmd, VkFramebuffer fb,
                            VkExtent2D extent, const MeshGpu &mesh) {
-  VkCommandBufferBeginInfo beginInfo{
-      VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+  VkCommandBufferBeginInfo beginInfo{};
+  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   vkBeginCommandBuffer(cmd, &beginInfo);
 
   std::array<VkClearValue, 2> clears{};
@@ -214,7 +234,8 @@ void Renderer::recordFrame(VkCommandBuffer cmd, VkFramebuffer fb,
   clears[1].depthStencil =
       VkClearDepthStencilValue{.depth = 1.0F, .stencil = 0};
 
-  VkRenderPassBeginInfo rpBegin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+  VkRenderPassBeginInfo rpBegin{};
+  rpBegin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
   rpBegin.renderPass = m_renderPass.handle();
   rpBegin.framebuffer = fb;
   rpBegin.renderArea.offset = VkOffset2D{0, 0};
@@ -227,6 +248,9 @@ void Renderer::recordFrame(VkCommandBuffer cmd, VkFramebuffer fb,
                     m_pipeline.pipeline());
 
   m_camera.bind(cmd, m_pipeline.layout(), 0, m_frames.currentFrameIndex());
+  if (m_activeMaterial != UINT32_MAX) {
+    m_materials.bind(cmd, m_pipeline.layout(), 1, m_activeMaterial);
+  }
 
   // Push constant (model matrix)
   glm::mat4 model = glm::mat4(1.0F);
@@ -275,10 +299,10 @@ bool Renderer::drawFrame(VkPresenter &presenter, MeshHandle mesh) {
   }
 
   // TODO REMOVE
-  static auto start = std::chrono::steady_clock::now();
-  auto now = std::chrono::steady_clock::now();
-  std::chrono::duration<float> dt = now - start;
-  m_timeSeconds = dt.count();
+  // static auto start = std::chrono::steady_clock::now();
+  // auto now = std::chrono::steady_clock::now();
+  // std::chrono::duration<float> dt = now - start;
+  // m_timeSeconds = dt.count();
 
   using FrameStatus = VkFrameManager::FrameStatus;
 
@@ -377,4 +401,54 @@ bool Renderer::recreateSwapchainDependent(VkPresenter &presenter,
 
   const uint32_t imageCount = presenter.imageCount();
   return m_frames.onSwapchainRecreated(imageCount);
+}
+
+uint32_t Renderer::createMaterialFromTexture(TextureHandle textureHandle) {
+  if (textureHandle.id >= m_textures.size() ||
+      !m_textures[textureHandle.id].valid()) {
+    std::cerr << "[Renderer] Invalid texture handle\n";
+    return UINT32_MAX;
+  }
+  return m_materials.allocateForTexture(m_textures[textureHandle.id]);
+}
+
+void Renderer::setActiveMaterial(uint32_t materialIndex) {
+  m_activeMaterial = materialIndex;
+}
+
+bool Renderer::createTextureFromImage(const engine::ImageData &img,
+                                      VkTexture2D &outTex) {
+  if (!img.valid()) {
+    std::cerr << "[Renderer] createTextureFromImage invalid image\n";
+    return false;
+  }
+
+  const size_t expected = size_t(img.width) * img.height * 4ULL;
+  if (img.pixels.size() != expected) {
+    std::cerr << "[Renderer] Image byte size mismatch: have="
+              << img.pixels.size() << " expected=" << expected << "\n";
+    return false;
+  }
+
+  return m_textureUploader.uploadRGBA8(img.pixels.data(), img.width, img.height,
+                                       outTex);
+}
+
+TextureHandle Renderer::createTextureFromFile(const std::string &path,
+                                              bool flipY) {
+  engine::ImageData img;
+  if (!loadImageRGBA8(path, img, flipY)) {
+    std::cerr << "[Renderer] Failed to load image: " << path << "\n";
+    return {};
+  }
+
+  VkTexture2D tex;
+  if (!m_textureUploader.uploadRGBA8(img.pixels.data(), img.width, img.height,
+                                     tex)) {
+    std::cerr << "[Renderer] Failed to create texture from file\n";
+    return {};
+  }
+
+  m_textures.push_back(std::move(tex));
+  return TextureHandle{static_cast<uint32_t>(m_textures.size() - 1)};
 }

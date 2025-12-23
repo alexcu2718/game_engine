@@ -6,6 +6,7 @@
 #include <utility>
 #include <vulkan/vulkan_core.h>
 
+// TODO: use GlfwWindow wrapper and get rid of GLFW dependency
 struct GLFWwindow;
 
 // Owns VulkanSwapchain and VkSurfaceKHR

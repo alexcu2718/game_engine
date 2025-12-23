@@ -69,21 +69,40 @@ bool VkGraphicsPipeline::init(VkDevice device, VkRenderPass renderPass,
 }
 
 bool VkGraphicsPipeline::createPipelineLayout() {
-  // Descriptor set layout (Camera UBO)
+  // Set 0: per frame UBO (for camera)
   VkDescriptorSetLayoutBinding uboBinding{};
   uboBinding.binding = 0;
   uboBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
   uboBinding.descriptorCount = 1;
   uboBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
-  VkDescriptorSetLayoutCreateInfo layoutInfo{
-      VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-  layoutInfo.bindingCount = 1;
-  layoutInfo.pBindings = &uboBinding;
+  VkDescriptorSetLayoutCreateInfo cameraLayoutInfo{};
+  cameraLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+  cameraLayoutInfo.bindingCount = 1;
+  cameraLayoutInfo.pBindings = &uboBinding;
 
-  if (vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr,
-                                  &m_descriptorSetLayout) != VK_SUCCESS) {
-    std::cerr << "[Pipeline] Failed to creat descriptor set layout\n";
+  if (vkCreateDescriptorSetLayout(m_device, &cameraLayoutInfo, nullptr,
+                                  &m_setLayoutCamera) != VK_SUCCESS) {
+    std::cerr << "[Pipeline] Failed to create camera descriptor set layout\n";
+    return false;
+  }
+
+  // Set 1: Material Texture
+  VkDescriptorSetLayoutBinding textureBinding{};
+  textureBinding.binding = 0;
+  textureBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  textureBinding.descriptorCount = 1;
+  textureBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+  VkDescriptorSetLayoutCreateInfo materialLayoutInfo{};
+  materialLayoutInfo.sType =
+      VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+  materialLayoutInfo.bindingCount = 1;
+  materialLayoutInfo.pBindings = &textureBinding;
+
+  if (vkCreateDescriptorSetLayout(m_device, &materialLayoutInfo, nullptr,
+                                  &m_setLayoutMaterial) != VK_SUCCESS) {
+    std::cerr << "[Pipeline] Failed to create texture descriptor set layout\n";
     return false;
   }
 
@@ -93,10 +112,13 @@ bool VkGraphicsPipeline::createPipelineLayout() {
   pushRange.offset = 0;
   pushRange.size = sizeof(glm::mat4);
 
+  std::array<VkDescriptorSetLayout, 2> setLayouts = {m_setLayoutCamera,
+                                                     m_setLayoutMaterial};
+
   VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
   pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-  pipelineLayoutInfo.setLayoutCount = 1;
-  pipelineLayoutInfo.pSetLayouts = &m_descriptorSetLayout;
+  pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(setLayouts.size());
+  pipelineLayoutInfo.pSetLayouts = setLayouts.data();
   pipelineLayoutInfo.pushConstantRangeCount = 1;
   pipelineLayoutInfo.pPushConstantRanges = &pushRange;
 
@@ -224,18 +246,25 @@ bool VkGraphicsPipeline::createGraphicsPipeline(
 
 void VkGraphicsPipeline::shutdown() noexcept {
   if (m_device != VK_NULL_HANDLE) {
-    if (m_descriptorSetLayout != VK_NULL_HANDLE) {
-      vkDestroyDescriptorSetLayout(m_device, m_descriptorSetLayout, nullptr);
+    if (m_setLayoutCamera != VK_NULL_HANDLE) {
+      vkDestroyDescriptorSetLayout(m_device, m_setLayoutCamera, nullptr);
     }
+
+    if (m_setLayoutMaterial != VK_NULL_HANDLE) {
+      vkDestroyDescriptorSetLayout(m_device, m_setLayoutMaterial, nullptr);
+    }
+
     if (m_graphicsPipeline != VK_NULL_HANDLE) {
       vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
     }
+
     if (m_pipelineLayout != VK_NULL_HANDLE) {
       vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
     }
   }
 
-  m_descriptorSetLayout = VK_NULL_HANDLE;
+  m_setLayoutCamera = VK_NULL_HANDLE;
+  m_setLayoutMaterial = VK_NULL_HANDLE;
   m_graphicsPipeline = VK_NULL_HANDLE;
   m_pipelineLayout = VK_NULL_HANDLE;
   m_device = VK_NULL_HANDLE;

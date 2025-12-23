@@ -5,6 +5,7 @@
 
 class CameraController {
 public:
+  // TODO: use GlfwWindow wrapper instead of GLFWwindow
   explicit CameraController(GLFWwindow *window, Camera *camera);
 
   void enableCursorCapture(bool enabled);

@@ -13,18 +13,18 @@ public:
   GlfwWindow(const GlfwWindow &) = delete;
   GlfwWindow &operator=(const GlfwWindow &) = delete;
 
-  GlfwWindow(GlfwWindow &&o) noexcept { *this = std::move(o); }
-  GlfwWindow &operator=(GlfwWindow &&o) noexcept {
-    if (this == &o) {
+  GlfwWindow(GlfwWindow &&other) noexcept { *this = std::move(other); }
+  GlfwWindow &operator=(GlfwWindow &&other) noexcept {
+    if (this == &other) {
       return *this;
     }
 
     shutdown();
 
-    m_window = o.m_window;
-    o.m_window = nullptr;
-    m_inited = o.m_inited;
-    o.m_inited = false;
+    m_window = other.m_window;
+    other.m_window = nullptr;
+    m_inited = other.m_inited;
+    other.m_inited = false;
 
     return *this;
   }

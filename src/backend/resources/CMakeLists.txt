@@ -1,8 +1,11 @@
+add_subdirectory(texture)
+
 add_library(engine_resources STATIC 
     vk_buffer.cpp
     vk_uploader.cpp
     vk_per_frame_uniform.cpp
     vk_depth_image.cpp
+    vk_material_sets.cpp
 )
 
 target_include_directories(engine_resources
@@ -13,6 +16,7 @@ target_include_directories(engine_resources
 target_link_libraries(engine_resources
     PUBLIC
         Vulkan::Vulkan
+        engine::resources::texture
     PRIVATE
         glm::glm
 )

@@ -72,9 +72,12 @@ bool VkDepthImage::init(VkPhysicalDevice physicalDevice, VkDevice device,
     return false;
   }
 
-  VkImageCreateInfo imageInfo{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+  // TODO: update to use vk_image.cpp init2D
+  VkImageCreateInfo imageInfo{};
+  imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
   imageInfo.imageType = VK_IMAGE_TYPE_2D;
-  imageInfo.extent = VkExtent3D{extent.width, extent.height, .depth = 1};
+  imageInfo.extent =
+      VkExtent3D{.width = extent.width, .height = extent.height, .depth = 1};
   imageInfo.mipLevels = 1; // Todo: add mipmap
   imageInfo.arrayLayers = 1;
   imageInfo.format = m_format;
@@ -102,7 +105,8 @@ bool VkDepthImage::init(VkPhysicalDevice physicalDevice, VkDevice device,
     return false;
   }
 
-  VkMemoryAllocateInfo allocInfo{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+  VkMemoryAllocateInfo allocInfo{};
+  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
   allocInfo.allocationSize = memReq.size;
   allocInfo.memoryTypeIndex = memIndex;
 
@@ -125,7 +129,8 @@ bool VkDepthImage::init(VkPhysicalDevice physicalDevice, VkDevice device,
     aspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
   }
 
-  VkImageViewCreateInfo viewInfo{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+  VkImageViewCreateInfo viewInfo{};
+  viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
   viewInfo.image = m_image;
   viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
   viewInfo.format = m_format;
