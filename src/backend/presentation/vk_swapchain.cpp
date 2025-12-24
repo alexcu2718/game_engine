@@ -148,9 +148,15 @@ VkSwapchain::chooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities,
   return actualExtent;
 }
 
-bool VkSwapchain::init(VkPhysicalDevice physicalDevice, VkDevice device,
-                       VkSurfaceKHR surface, uint32_t width, uint32_t height,
-                       [[maybe_unused]] uint32_t graphicsQueueFamilyIndex) {
+bool VkSwapchain::init(VkBackendCtx &ctx, VkSurfaceKHR surface, uint32_t width,
+                       uint32_t height) {
+  if (surface == VK_NULL_HANDLE) {
+    std::cerr << "[Swapchain] surface is null\n";
+    return false;
+  }
+
+  VkDevice device = ctx.device();
+  VkPhysicalDevice physicalDevice = ctx.physicalDevice();
 
   VkSwapchainKHR old = m_swapChain;
 
@@ -243,27 +249,26 @@ bool VkSwapchain::init(VkPhysicalDevice physicalDevice, VkDevice device,
 }
 
 void VkSwapchain::shutdown(VkDevice device) noexcept {
-  std::cout << "[Swapchain] shutdown has begun\n";
+  if (device != VK_NULL_HANDLE) {
+    destroySwapchainImageViews(device);
 
-  destroySwapchainImageViews(device);
-
-  if (m_swapChain != VK_NULL_HANDLE) {
-    std::cout << "[Swapchain] Destroying swapchain\n";
-    vkDestroySwapchainKHR(device, m_swapChain, nullptr);
-    m_swapChain = VK_NULL_HANDLE;
-    m_swapChainImages.clear();
+    if (m_swapChain != VK_NULL_HANDLE) {
+      std::cout << "[Swapchain] Destroying swapchain\n";
+      vkDestroySwapchainKHR(device, m_swapChain, nullptr);
+    }
   } else {
-    std::cout << "[Swapchain] No swapchain to destory\n";
+    m_swapChainImageViews.clear();
   }
 
-  // Surface is owned by whomever created it
-  m_surface = VK_NULL_HANDLE;
+  m_swapChain = VK_NULL_HANDLE;
+  m_swapChainImages.clear();
 
-  std::cout << "[Swapchain] shutdown completed\n";
+  m_surface = VK_NULL_HANDLE;
+  m_swapChainImageFormat = VK_FORMAT_UNDEFINED;
+  m_swapChainExtent = {};
 }
 
 bool VkSwapchain::createSwapchainImageViews(VkDevice device) {
-  // If called twice, clean up first
   destroySwapchainImageViews(device);
 
   if (device == VK_NULL_HANDLE) {
@@ -308,7 +313,6 @@ bool VkSwapchain::createSwapchainImageViews(VkDevice device) {
     if (res != VK_SUCCESS) {
       std::cerr << "[Swapchain] vkCreateImageView() failed at index " << i
                 << " error=" << res << "\n";
-      // destroy any created so far
       destroySwapchainImageViews(device);
       return false;
     }

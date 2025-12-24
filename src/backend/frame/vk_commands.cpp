@@ -1,32 +1,43 @@
 #include "vk_commands.hpp"
 
+#include "../core/vk_backend_ctx.hpp"
+
 #include <cstdint>
 #include <functional>
 #include <iostream>
 #include <vulkan/vulkan_core.h>
 
-bool VkCommands::init(VkDevice device, uint32_t queueFamilyIndex,
-                      VkCommandPoolCreateFlags flags) {
-  if (device == VK_NULL_HANDLE) {
+bool VkCommands::init(VkBackendCtx &ctx, VkCommandPoolCreateFlags flags) {
+  if (ctx.device() == VK_NULL_HANDLE) {
     std::cerr << "[Cmd] Device is null\n";
     return false;
   }
 
+  uint32_t family = ctx.graphicsQueueFamily();
+  if (family == UINT32_MAX) {
+    std::cerr << "[Cmd] ctx.graphicsQueueFamily invalid\n";
+    return false;
+  }
+
+  std::cout << "before shutdown\n";
+
   // Re-init
   shutdown();
 
-  m_device = device;
+  std::cout << "after shutdown\n";
+
+  m_ctx = &ctx;
 
   VkCommandPoolCreateInfo poolInfo{};
   poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-  poolInfo.queueFamilyIndex = queueFamilyIndex;
+  poolInfo.queueFamilyIndex = m_ctx->graphicsQueueFamily();
   poolInfo.flags = flags; // per-frame
 
-  VkResult res = vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_pool);
+  VkResult res = vkCreateCommandPool(ctx.device(), &poolInfo, nullptr, &m_pool);
   if (res != VK_SUCCESS) {
     std::cerr << "[Cmd] vkCreateCommandPool failed: " << res << "\n";
     m_pool = VK_NULL_HANDLE;
-    m_device = VK_NULL_HANDLE;
+    m_ctx = VK_NULL_HANDLE;
     return false;
   }
 
@@ -35,7 +46,9 @@ bool VkCommands::init(VkDevice device, uint32_t queueFamilyIndex,
 }
 
 bool VkCommands::allocate(uint32_t count, VkCommandBufferLevel level) {
-  if (m_device == VK_NULL_HANDLE || m_pool == VK_NULL_HANDLE) {
+  VkDevice device = m_ctx->device();
+
+  if (device == VK_NULL_HANDLE || m_pool == VK_NULL_HANDLE) {
     std::cerr << "[Cmd] Device or command pool not read\n";
     return false;
   }
@@ -51,8 +64,7 @@ bool VkCommands::allocate(uint32_t count, VkCommandBufferLevel level) {
   allocInfo.level = level;
   allocInfo.commandBufferCount = count;
 
-  VkResult res =
-      vkAllocateCommandBuffers(m_device, &allocInfo, m_buffers.data());
+  VkResult res = vkAllocateCommandBuffers(device, &allocInfo, m_buffers.data());
   if (res != VK_SUCCESS) {
     std::cerr << "[Cmd] vkAllocateCommandBuffers failed: " << res << "\n";
     m_buffers.clear();
@@ -65,7 +77,9 @@ bool VkCommands::allocate(uint32_t count, VkCommandBufferLevel level) {
 
 bool VkCommands::submitImmediate(
     VkQueue queue, const std::function<void(VkCommandBuffer)> &record) const {
-  if (m_device == VK_NULL_HANDLE || m_pool == VK_NULL_HANDLE) {
+  VkDevice device = m_ctx->device();
+
+  if (device == VK_NULL_HANDLE || m_pool == VK_NULL_HANDLE) {
     std::cerr << "[Commands] submitImmediate: invalid state\n";
     return false;
   }
@@ -77,7 +91,7 @@ bool VkCommands::submitImmediate(
   allocInfo.commandBufferCount = 1;
 
   VkCommandBuffer cmd = VK_NULL_HANDLE;
-  VkResult res = vkAllocateCommandBuffers(m_device, &allocInfo, &cmd);
+  VkResult res = vkAllocateCommandBuffers(device, &allocInfo, &cmd);
   if (res != VK_SUCCESS) {
     std::cerr << "[Commands] vkAllocateCommand Buffers failed: " << res << "\n";
     return false;
@@ -95,10 +109,10 @@ bool VkCommands::submitImmediate(
   fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
   VkFence fence = VK_NULL_HANDLE;
 
-  res = vkCreateFence(m_device, &fenceInfo, nullptr, &fence);
+  res = vkCreateFence(device, &fenceInfo, nullptr, &fence);
   if (res != VK_SUCCESS) {
     std::cerr << "[Commands] vkCreateFence failed: " << res << "\n";
-    vkFreeCommandBuffers(m_device, m_pool, 1, &cmd);
+    vkFreeCommandBuffers(device, m_pool, 1, &cmd);
     return false;
   }
 
@@ -110,22 +124,22 @@ bool VkCommands::submitImmediate(
   res = vkQueueSubmit(queue, 1, &submit, fence);
   if (res != VK_SUCCESS) {
     std::cerr << "[Commands] vkQueueSubmit failed: " << res << "\n";
-    vkDestroyFence(m_device, fence, nullptr);
-    vkFreeCommandBuffers(m_device, m_pool, 1, &cmd);
+    vkDestroyFence(device, fence, nullptr);
+    vkFreeCommandBuffers(device, m_pool, 1, &cmd);
     return false;
   }
 
-  vkWaitForFences(m_device, 1, &fence, VK_TRUE, UINT64_MAX);
+  vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
 
-  vkDestroyFence(m_device, fence, nullptr);
-  vkFreeCommandBuffers(m_device, m_pool, 1, &cmd);
+  vkDestroyFence(device, fence, nullptr);
+  vkFreeCommandBuffers(device, m_pool, 1, &cmd);
   return true;
 }
 
 void VkCommands::free() noexcept {
-  if (m_device != VK_NULL_HANDLE && m_pool != VK_NULL_HANDLE &&
-      !m_buffers.empty()) {
-    vkFreeCommandBuffers(m_device, m_pool,
+  if (m_ctx != nullptr && m_ctx->device() != VK_NULL_HANDLE &&
+      m_pool != VK_NULL_HANDLE && !m_buffers.empty()) {
+    vkFreeCommandBuffers(m_ctx->device(), m_pool,
                          static_cast<uint32_t>(m_buffers.size()),
                          m_buffers.data());
   }
@@ -135,10 +149,11 @@ void VkCommands::free() noexcept {
 void VkCommands::shutdown() noexcept {
   free();
 
-  if (m_device != VK_NULL_HANDLE && m_pool != VK_NULL_HANDLE) {
-    vkDestroyCommandPool(m_device, m_pool, nullptr);
+  if (m_ctx != nullptr && m_ctx->device() != VK_NULL_HANDLE &&
+      m_pool != VK_NULL_HANDLE) {
+    vkDestroyCommandPool(m_ctx->device(), m_pool, nullptr);
   }
 
   m_pool = VK_NULL_HANDLE;
-  m_device = VK_NULL_HANDLE;
+  m_ctx = nullptr;
 }

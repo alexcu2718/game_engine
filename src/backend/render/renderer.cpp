@@ -15,22 +15,17 @@
 #include <glm/trigonometric.hpp>
 #include <iostream>
 #include <string>
-#include <utility>
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
-bool Renderer::init(VkPhysicalDevice physicalDevice, VkDevice device,
-                    VkQueue graphicsQueue, uint32_t graphicsQueueFamily,
-                    VkPresenter &presenter, uint32_t framesInFlight,
-                    const std::string &vertSpvPath,
+bool Renderer::init(VkBackendCtx &ctx, VkPresenter &presenter,
+                    uint32_t framesInFlight, const std::string &vertSpvPath,
                     const std::string &fragSpvPath) {
-  if (device == VK_NULL_HANDLE || graphicsQueue == VK_NULL_HANDLE) {
-    std::cerr << "[Renderer] Invalid device/queue\n";
-    return false;
-  }
-
-  if (graphicsQueueFamily == UINT32_MAX) {
-    std::cerr << "[Renderer] Invalid graphics queue family\n";
+  if (ctx.device() == VK_NULL_HANDLE ||
+      ctx.physicalDevice() == VK_NULL_HANDLE ||
+      ctx.graphicsQueue() == VK_NULL_HANDLE ||
+      ctx.graphicsQueueFamily() == UINT32_MAX) {
+    std::cerr << "[Renderer] backend ctx not initialized\n";
     return false;
   }
 
@@ -42,37 +37,36 @@ bool Renderer::init(VkPhysicalDevice physicalDevice, VkDevice device,
   // Re-init
   shutdown();
 
-  m_device = device;
-  m_physicalDevice = physicalDevice;
-  m_graphicsQueue = graphicsQueue;
-  m_graphicsQueueFamily = graphicsQueueFamily;
+  m_ctx = &ctx;
   m_framesInFlight = framesInFlight;
-
   m_vertPath = vertSpvPath;
   m_fragPath = fragSpvPath;
 
-  if (!m_depth.init(m_physicalDevice, device, presenter.extent())) {
+  VkDevice device = m_ctx->device();
+  VkPhysicalDevice physicalDevice = m_ctx->physicalDevice();
+
+  if (!m_depth.init(physicalDevice, device, presenter.extent())) {
     std::cerr << "[Renderer] Failed to create depth buffer\n";
     shutdown();
     return false;
   }
 
   // Create render pass
-  if (!m_renderPass.init(m_device, presenter.imageFormat(), m_depth.format())) {
+  if (!m_renderPass.init(device, presenter.imageFormat(), m_depth.format())) {
     std::cerr << "[Renderer] Failed to create render pass\n";
     shutdown();
     return false;
   }
 
   // Create shader interface
-  if (!m_interface.init(m_device)) {
+  if (!m_interface.init(device)) {
     std::cerr << "[Renderer] Failed to create shader interface\n";
     shutdown();
     return false;
   }
 
   // Create graphics pipeline
-  if (!m_pipeline.init(m_device, m_renderPass.handle(), presenter.extent(),
+  if (!m_pipeline.init(device, m_renderPass.handle(), presenter.extent(),
                        m_interface.pipelineLayout(), m_vertPath, m_fragPath)) {
     std::cerr << "[Renderer] Failed to create graphics pipeline\n";
     shutdown();
@@ -80,7 +74,7 @@ bool Renderer::init(VkPhysicalDevice physicalDevice, VkDevice device,
   }
 
   // Create frame buffers
-  if (!m_framebuffers.init(m_device, m_renderPass.handle(),
+  if (!m_framebuffers.init(device, m_renderPass.handle(),
                            presenter.imageViews(), m_depth.view(),
                            presenter.extent())) {
     std::cerr << "[Renderer] Failed to create framebuffers\n";
@@ -89,41 +83,41 @@ bool Renderer::init(VkPhysicalDevice physicalDevice, VkDevice device,
   }
 
   // Create command pool
-  if (!m_commands.init(m_device, m_graphicsQueueFamily)) {
+  if (!m_commands.init(*m_ctx)) {
     std::cerr << "[Renderer] Failed to create the command pool\n";
     shutdown();
     return false;
   }
 
-  if (!m_perFrameBufs.init(m_physicalDevice, m_device, m_framesInFlight,
+  if (!m_perFrameBufs.init(physicalDevice, device, m_framesInFlight,
                            sizeof(CameraUBO))) {
     std::cerr << "[Renderer] Failed to init camera UBO\n";
     shutdown();
     return false;
   }
 
-  if (!m_perFrameSets.init(m_device, m_interface.setLayoutPerFrame(),
+  if (!m_perFrameSets.init(device, m_interface.setLayoutPerFrame(),
                            m_perFrameBufs)) {
     std::cerr << "[Renderer] Failed to init camera UBO\n";
     shutdown();
     return false;
   }
 
-  if (!m_uploader.init(m_physicalDevice, m_device, m_graphicsQueue,
+  if (!m_uploader.init(physicalDevice, device, m_ctx->graphicsQueue(),
                        &m_commands)) {
     std::cerr << "[Renderer] Failed to init uploader\n";
     shutdown();
     return false;
   }
 
-  if (!m_textureUploader.init(m_physicalDevice, m_device, m_graphicsQueue,
+  if (!m_textureUploader.init(physicalDevice, device, m_ctx->graphicsQueue(),
                               &m_commands)) {
     std::cerr << "[Renderer] Failed to init texture uploader\n";
     shutdown();
     return false;
   }
 
-  if (!m_materials.init(m_device, m_interface.setLayoutMaterial(), 128)) {
+  if (!m_materials.init(device, m_interface.setLayoutMaterial(), 128)) {
     std::cerr << "[Renderer] Failed to init material sets\n";
     shutdown();
     return false;
@@ -139,7 +133,7 @@ bool Renderer::init(VkPhysicalDevice physicalDevice, VkDevice device,
   const uint32_t imageCount =
       static_cast<uint32_t>(presenter.imageViews().size());
 
-  if (!m_frames.init(m_device, m_framesInFlight, imageCount)) {
+  if (!m_frames.init(device, m_framesInFlight, imageCount)) {
     std::cerr << "[Renderer] Failed to create frame sync objects\n";
     shutdown();
     return false;
@@ -149,8 +143,13 @@ bool Renderer::init(VkPhysicalDevice physicalDevice, VkDevice device,
 
 // Destroy in reverse initialization order
 void Renderer::shutdown() noexcept {
-  if (m_device != VK_NULL_HANDLE) {
-    vkDeviceWaitIdle(m_device);
+  VkDevice device = VK_NULL_HANDLE;
+  if (m_ctx != nullptr) {
+    device = m_ctx->device();
+  }
+
+  if (device != VK_NULL_HANDLE) {
+    vkDeviceWaitIdle(device);
   }
 
   // Commands-dependents
@@ -183,9 +182,7 @@ void Renderer::shutdown() noexcept {
   m_renderPass.shutdown();
   m_depth.shutdown();
 
-  m_device = VK_NULL_HANDLE;
-  m_graphicsQueue = VK_NULL_HANDLE;
-  m_graphicsQueueFamily = UINT32_MAX;
+  m_ctx = nullptr;
   m_framesInFlight = 0;
 
   m_vertPath.clear();
@@ -310,7 +307,7 @@ void Renderer::recordFrame(VkCommandBuffer cmd, VkFramebuffer fb,
 }
 
 bool Renderer::drawFrame(VkPresenter &presenter, MeshHandle mesh) {
-  if (m_device == VK_NULL_HANDLE) {
+  if (m_ctx->device() == VK_NULL_HANDLE) {
     return false;
   }
 
@@ -345,8 +342,8 @@ bool Renderer::drawFrame(VkPresenter &presenter, MeshHandle mesh) {
   recordFrame(cmd, m_framebuffers.at(imageIndex), presenter.extent(),
               m_meshes[mesh.id]);
 
-  auto pst = m_frames.submitAndPresent(m_graphicsQueue, presenter.swapchain(),
-                                       imageIndex, cmd);
+  auto pst = m_frames.submitAndPresent(m_ctx->graphicsQueue(),
+                                       presenter.swapchain(), imageIndex, cmd);
 
   // TODO: handle SUBOPTIMAL recreate, i.e when convienent instead of now
   if (pst == FrameStatus::OutOfDate) {
@@ -360,14 +357,16 @@ bool Renderer::drawFrame(VkPresenter &presenter, MeshHandle mesh) {
 bool Renderer::recreateSwapchainDependent(VkPresenter &presenter,
                                           const std::string &vertSpvPath,
                                           const std::string &fragSpvPath) {
-  if (m_device == VK_NULL_HANDLE) {
+  if (m_ctx == nullptr || m_ctx->device() == VK_NULL_HANDLE) {
     return false;
   }
+
+  VkDevice device = m_ctx->device();
 
   const VkFormat oldFormat = presenter.imageFormat();
   const VkExtent2D oldExtent = presenter.extent();
 
-  vkDeviceWaitIdle(m_device);
+  vkDeviceWaitIdle(device);
 
   m_framebuffers.shutdown();
 
@@ -388,7 +387,7 @@ bool Renderer::recreateSwapchainDependent(VkPresenter &presenter,
     m_depth.shutdown();
 
     // Recreate depth
-    if (!m_depth.init(m_physicalDevice, m_device, presenter.extent())) {
+    if (!m_depth.init(m_ctx->physicalDevice(), device, presenter.extent())) {
       return false;
     }
   }
@@ -397,12 +396,11 @@ bool Renderer::recreateSwapchainDependent(VkPresenter &presenter,
     m_pipeline.shutdown();
     m_renderPass.shutdown();
 
-    if (!m_renderPass.init(m_device, presenter.imageFormat(),
-                           m_depth.format())) {
+    if (!m_renderPass.init(device, presenter.imageFormat(), m_depth.format())) {
       return false;
     }
 
-    if (!m_pipeline.init(m_device, m_renderPass.handle(), presenter.extent(),
+    if (!m_pipeline.init(device, m_renderPass.handle(), presenter.extent(),
                          m_interface.pipelineLayout(), vertSpvPath,
                          fragSpvPath)) {
       return false;
@@ -410,7 +408,7 @@ bool Renderer::recreateSwapchainDependent(VkPresenter &presenter,
   }
 
   // Recreate framebuffers
-  if (!m_framebuffers.init(m_device, m_renderPass.handle(),
+  if (!m_framebuffers.init(device, m_renderPass.handle(),
                            presenter.imageViews(), m_depth.view(),
                            presenter.extent())) {
     return false;

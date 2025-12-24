@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../core/vk_backend_ctx.hpp"
 #include "vk_swapchain.hpp"
 
 #include <cstdint>
@@ -26,17 +27,16 @@ public:
 
     shutdown();
 
-    m_instance = std::exchange(other.m_instance, VK_NULL_HANDLE);
-    m_device = std::exchange(other.m_device, VK_NULL_HANDLE);
+    m_ctx = std::exchange(other.m_ctx, nullptr);
+    m_window = std::exchange(other.m_window, nullptr);
     m_surface = std::exchange(other.m_surface, VK_NULL_HANDLE);
     m_swapchain = std::move(other.m_swapchain);
 
     return *this;
   }
 
-  bool init(VkInstance instance, VkPhysicalDevice physicalDevice,
-            VkDevice device, GLFWwindow *window, uint32_t width,
-            uint32_t height, uint32_t graphicsQueueFamilyIndex);
+  bool init(VkBackendCtx &ctx, GLFWwindow *window, uint32_t width,
+            uint32_t height);
   void shutdown() noexcept;
 
   [[nodiscard]] bool recreateSwapchain();
@@ -64,12 +64,8 @@ public:
   }
 
 private:
-  VkInstance m_instance = VK_NULL_HANDLE;
-  VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
-  VkDevice m_device = VK_NULL_HANDLE;
-
-  GLFWwindow *m_window = nullptr;
-  uint32_t m_graphicsQueueFamilyIndex = UINT32_MAX;
+  VkBackendCtx *m_ctx = nullptr;  // non-owning
+  GLFWwindow *m_window = nullptr; // non-owning
 
   VkSurfaceKHR m_surface = VK_NULL_HANDLE;
   VkSwapchain m_swapchain;

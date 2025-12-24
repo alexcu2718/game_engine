@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../core/vk_backend_ctx.hpp"
+
 #include <functional>
 #include <utility>
 #include <vector>
@@ -21,13 +23,13 @@ public:
 
     shutdown();
 
-    m_device = std::exchange(other.m_device, VK_NULL_HANDLE);
+    m_ctx = std::exchange(other.m_ctx, nullptr);
     m_pool = std::exchange(other.m_pool, VK_NULL_HANDLE);
     m_buffers = std::exchange(other.m_buffers, std::vector<VkCommandBuffer>{});
     return *this;
   }
 
-  bool init(VkDevice device, uint32_t queueFamilyIndex,
+  bool init(VkBackendCtx &ctx,
             VkCommandPoolCreateFlags flags =
                 VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
   void shutdown() noexcept;
@@ -46,7 +48,7 @@ public:
   }
 
 private:
-  VkDevice m_device = VK_NULL_HANDLE;     // no-owning
+  VkBackendCtx *m_ctx = nullptr;          // non-owning
   VkCommandPool m_pool = VK_NULL_HANDLE;  // owning
   std::vector<VkCommandBuffer> m_buffers; // allocated
 };

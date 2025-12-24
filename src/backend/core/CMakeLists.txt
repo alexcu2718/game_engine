@@ -1,6 +1,7 @@
 add_library(engine_core STATIC 
     vk_instance.cpp
     vk_device.cpp
+    vk_backend_ctx.cpp
 )
 
 target_include_directories(engine_core 

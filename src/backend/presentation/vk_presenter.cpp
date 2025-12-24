@@ -1,53 +1,47 @@
 #include "vk_presenter.hpp"
 
+#include "../core/vk_backend_ctx.hpp"
+
 #include <GLFW/glfw3.h>
 #include <cstdint>
 #include <iostream>
 #include <vulkan/vulkan_core.h>
 
-bool VkPresenter::init(VkInstance instance, VkPhysicalDevice physicalDevice,
-                       VkDevice device, GLFWwindow *window, uint32_t width,
-                       uint32_t height, uint32_t graphicsQueueFamilyIndex) {
-  if (device == VK_NULL_HANDLE) {
-    std::cerr << "[Presenter] device is null\n";
-    return false;
-  }
-
+bool VkPresenter::init(VkBackendCtx &ctx, GLFWwindow *window, uint32_t width,
+                       uint32_t height) {
   if (window == nullptr) {
     std::cerr << "[Presenter] window is null\n";
     return false;
   }
 
-  if (instance == VK_NULL_HANDLE) {
-    std::cerr << "[Presenter] ctx.instance() is null\n";
+  if (width == 0 || height == 0) {
+    std::cerr << "[Presenter] window width and height are 0";
     return false;
   }
 
-  // Re-init
   shutdown();
 
-  m_instance = instance;
-  m_device = device;
+  m_ctx = &ctx;
+  m_window = window;
 
   VkResult surfRes =
-      glfwCreateWindowSurface(m_instance, window, nullptr, &m_surface);
+      glfwCreateWindowSurface(m_ctx->instance(), window, nullptr, &m_surface);
   if (surfRes != VK_SUCCESS) {
     std::cerr << "[Presenter] glfwCreateWindowSurface failed: " << surfRes
               << "\n";
     m_surface = VK_NULL_HANDLE;
-    m_instance = VK_NULL_HANDLE;
-    m_device = VK_NULL_HANDLE;
+    m_ctx = nullptr;
+    m_window = nullptr;
     return false;
   }
 
-  if (!m_swapchain.init(physicalDevice, m_device, m_surface, width, height,
-                        graphicsQueueFamilyIndex)) {
+  if (!m_swapchain.init(*m_ctx, m_surface, width, height)) {
     std::cerr << "[Presenter] swapchain init failed\n";
     shutdown();
     return false;
   }
 
-  if (!m_swapchain.createSwapchainImageViews(m_device)) {
+  if (!m_swapchain.createSwapchainImageViews(m_ctx->device())) {
     std::cerr << "[Presenter] swapchain image views creation failed\n";
     shutdown();
     return false;
@@ -57,22 +51,36 @@ bool VkPresenter::init(VkInstance instance, VkPhysicalDevice physicalDevice,
 }
 
 void VkPresenter::shutdown() noexcept {
-  if (m_device != VK_NULL_HANDLE) {
-    m_swapchain.shutdown(m_device);
+  if (m_ctx == nullptr) {
+    m_surface = VK_NULL_HANDLE;
+    m_window = nullptr;
+    return;
   }
 
-  if (m_instance != VK_NULL_HANDLE && m_surface != VK_NULL_HANDLE) {
-    vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+  VkDevice device = m_ctx->device();
+  VkInstance instance = m_ctx->instance();
+
+  if (device != VK_NULL_HANDLE) {
+    m_swapchain.shutdown(device);
+  }
+
+  if (instance != VK_NULL_HANDLE && m_surface != VK_NULL_HANDLE) {
+    vkDestroySurfaceKHR(instance, m_surface, nullptr);
   }
 
   m_surface = VK_NULL_HANDLE;
-  m_device = VK_NULL_HANDLE;
-  m_instance = VK_NULL_HANDLE;
+  m_window = nullptr;
+  m_ctx = nullptr;
 }
 
 bool VkPresenter::recreateSwapchain() {
-  if (!isInitialized() || m_device == VK_NULL_HANDLE ||
-      m_physicalDevice == VK_NULL_HANDLE || m_window == nullptr) {
+  if (!isInitialized() || m_ctx == nullptr || m_window == nullptr) {
+    return false;
+  }
+
+  VkDevice device = m_ctx->device();
+  VkPhysicalDevice physicalDevice = m_ctx->physicalDevice();
+  if (device == VK_NULL_HANDLE || physicalDevice == VK_NULL_HANDLE) {
     return false;
   }
 
@@ -85,11 +93,10 @@ bool VkPresenter::recreateSwapchain() {
     return false;
   }
 
-  if (!m_swapchain.init(
-          m_physicalDevice, m_device, m_surface, static_cast<uint32_t>(fbWidth),
-          static_cast<uint32_t>(fbHeight), m_graphicsQueueFamilyIndex)) {
+  if (!m_swapchain.init(*m_ctx, m_surface, static_cast<uint32_t>(fbWidth),
+                        static_cast<uint32_t>(fbHeight))) {
     return false;
   }
 
-  return m_swapchain.createSwapchainImageViews(m_device);
+  return m_swapchain.createSwapchainImageViews(device);
 }

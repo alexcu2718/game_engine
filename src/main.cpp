@@ -1,11 +1,10 @@
-#include "backend/core/vk_device.hpp"
-#include "backend/core/vk_instance.hpp"
 #include "backend/presentation/vk_presenter.hpp"
 #include "backend/render/renderer.hpp"
 #include "engine/camera/camera.hpp"
 #include "engine/geometry/primitives.hpp"
 #include "platform/input/camera_controller.hpp"
 #include "platform/window/glfw_window.hpp"
+#include "vk_backend_ctx.hpp"
 
 #include <GLFW/glfw3.h>
 #include <cstdint>
@@ -13,22 +12,20 @@
 #include <vulkan/vulkan_core.h>
 
 int main() {
-  VkInstanceCtx instance;
-  VkDeviceCtx device;
+  VkBackendCtx ctx;
   VkPresenter presenter;
   Renderer renderer;
 
   auto cleanup = [&]() {
-    if (device.device() != VK_NULL_HANDLE) {
-      vkDeviceWaitIdle(device.device());
+    if (ctx.device() != VK_NULL_HANDLE) {
+      vkDeviceWaitIdle(ctx.device());
     }
 
     std::cout << "Entering cleanup\n";
 
     renderer.shutdown();
     presenter.shutdown();
-    device.shutdown();
-    instance.shutdown();
+    ctx.shutdown();
   };
 
   GlfwWindow window;
@@ -51,35 +48,25 @@ int main() {
     return 1;
   }
 
-  // TODO: Make a "presenter" like class that owns instance and device
-  if (!instance.init(platformExtensions, enableValidation)) {
-    std::cerr << "Failed to initialize Vulkan\n";
+  if (!ctx.init(platformExtensions, enableValidation)) {
+    std::cerr << "VkBackendCtx init failed\n";
     cleanup();
     return 1;
   }
 
-  if (!device.init(instance.instance())) {
-    std::cerr << "Failed to initialize Vulkan device\n";
-    cleanup();
-    return 1;
-  }
-
-  // TODO: abstract instance, device, presenter, and renderer from main
   uint32_t fbWidth = 0;
   uint32_t fbHeight = 0;
+
   window.framebufferSize(fbWidth, fbHeight);
-  if (!presenter.init(instance.instance(), device.physicalDevice(),
-                      device.device(), window.handle(), fbWidth, fbHeight,
-                      device.queues().graphicsFamily)) {
+  if (!presenter.init(ctx, window.handle(), fbWidth, fbHeight)) {
     std::cerr << "Failed to initialize presenter\n";
     cleanup();
     return 1;
   }
 
   constexpr uint32_t framesInFlight = 2;
-  if (!renderer.init(device.physicalDevice(), device.device(),
-                     device.queues().graphics, device.queues().graphicsFamily,
-                     presenter, framesInFlight, "shaders/bin/shader.vert.spv",
+  if (!renderer.init(ctx, presenter, framesInFlight,
+                     "shaders/bin/shader.vert.spv",
                      "shaders/bin/shader.frag.spv")) {
     std::cerr << "Failed to initialize renderer\n";
     cleanup();

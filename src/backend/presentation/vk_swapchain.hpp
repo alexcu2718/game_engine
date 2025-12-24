@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../core/vk_backend_ctx.hpp"
+
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -30,9 +32,8 @@ public:
     return *this;
   }
 
-  bool init(VkPhysicalDevice physicalDevice, VkDevice device,
-            VkSurfaceKHR surface, uint32_t width, uint32_t height,
-            uint32_t graphicsQueueFamilyIndex);
+  bool init(VkBackendCtx &ctx, VkSurfaceKHR surface, uint32_t width,
+            uint32_t height);
   void shutdown(VkDevice device) noexcept;
 
   [[nodiscard]] VkSwapchainKHR swapchain() const noexcept {
