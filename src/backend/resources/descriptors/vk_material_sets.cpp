@@ -1,6 +1,6 @@
 #include "vk_material_sets.hpp"
 
-#include "../textures/vk_texture.hpp"
+#include "backend/resources/textures/vk_texture.hpp"
 
 #include <cstdint>
 #include <iostream>

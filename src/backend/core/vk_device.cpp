@@ -170,15 +170,6 @@ bool VkDeviceCtx::createLogicalDevice() {
       static_cast<uint32_t>(kDeviceExtensions.size());
   createInfo.ppEnabledExtensionNames = kDeviceExtensions.data();
 
-  // if (m_enableValidationLayers) {
-  //   createInfo.enabledLayerCount =
-  //       static_cast<uint32_t>(kValidationLayers.size());
-  //   createInfo.ppEnabledLayerNames = kValidationLayers.data();
-  // } else {
-  //   createInfo.enabledLayerCount = 0;
-  //   createInfo.ppEnabledLayerNames = nullptr;
-  // }
-
   VkResult result =
       vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device);
 

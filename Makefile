@@ -1,7 +1,13 @@
 BUILD_DIR := build
 
+.PHONY: configure build run clean
+
 configure:
-	cmake -S . -B $(BUILD_DIR) -G Ninja
+	VCPKG_DISABLE_METRICS=1 cmake -S . -B $(BUILD_DIR) -G Ninja \
+		-DCMAKE_TOOLCHAIN_FILE=$(CURDIR)/vcpkg/scripts/buildsystems/vcpkg.cmake \
+		-DVCPKG_TARGET_TRIPLET=arm64-osx \
+		-DVCPKG_HOST_TRIPLET=arm64-osx \
+		-DCMAKE_OSX_ARCHITECTURES=arm64
 
 build: configure
 	cmake --build $(BUILD_DIR)

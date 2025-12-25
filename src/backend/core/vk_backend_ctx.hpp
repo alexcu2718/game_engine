@@ -2,9 +2,11 @@
 
 #include "vk_device.hpp"
 #include "vk_instance.hpp"
+
 #include <cstdint>
 #include <span>
 #include <utility>
+#include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 
 class VkBackendCtx {
@@ -50,9 +52,12 @@ public:
     return m_device.queues().graphics;
   }
 
+  [[nodiscard]] VmaAllocator allocator() const noexcept { return m_allocator; }
+
 private:
   [[nodiscard]] bool createAllocator();
 
   VkInstanceCtx m_instance;
   VkDeviceCtx m_device;
+  VmaAllocator m_allocator = nullptr;
 };

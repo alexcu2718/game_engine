@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../engine/mesh/vertex.hpp"
+#include "engine/mesh/vertex.hpp"
 
 #include <array>
 #include <cstddef>

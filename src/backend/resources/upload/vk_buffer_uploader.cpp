@@ -1,18 +1,17 @@
 #include "vk_buffer_uploader.hpp"
 
 #include <iostream>
+#include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 
-bool VkBufferUploader::init(VkPhysicalDevice physicalDevice, VkDevice device,
-                            VkQueue queue, VkCommands *commands) {
-  if (physicalDevice == VK_NULL_HANDLE || device == VK_NULL_HANDLE ||
-      queue == VK_NULL_HANDLE || commands == nullptr) {
+bool VkBufferUploader::init(VmaAllocator allocator, VkQueue queue,
+                            VkCommands *commands) {
+  if (allocator == nullptr || queue == VK_NULL_HANDLE || commands == nullptr) {
     std::cerr << "[Uploader] Invalid init args\n";
     return false;
   }
 
-  m_physicalDevice = physicalDevice;
-  m_device = device;
+  m_allocator = allocator;
   m_queue = queue;
   m_commands = commands;
 
@@ -20,8 +19,7 @@ bool VkBufferUploader::init(VkPhysicalDevice physicalDevice, VkDevice device,
 }
 
 void VkBufferUploader::shutdown() noexcept {
-  m_physicalDevice = VK_NULL_HANDLE;
-  m_device = VK_NULL_HANDLE;
+  m_allocator = nullptr;
   m_queue = VK_NULL_HANDLE;
   m_commands = nullptr;
 }
@@ -30,8 +28,8 @@ bool VkBufferUploader::uploadToDeviceLocalBuffer(const void *data,
                                                  VkDeviceSize size,
                                                  VkBufferUsageFlags finalUsage,
                                                  VkBufferObj &outBuffer) {
-  if (m_device == VK_NULL_HANDLE || m_physicalDevice == VK_NULL_HANDLE ||
-      m_queue == VK_NULL_HANDLE || m_commands == nullptr) {
+  if (m_allocator == nullptr || m_queue == VK_NULL_HANDLE ||
+      m_commands == nullptr) {
     std::cerr << "[Uploader] Not initialized\n";
     return false;
   }
@@ -41,13 +39,12 @@ bool VkBufferUploader::uploadToDeviceLocalBuffer(const void *data,
     return false;
   }
 
-  // Staging buffer: CPU-visible
+  // Staging buffer: CPU -> GPU
   // TODO: persist the staging buffer instead of remaking it per upload
+  // TODO: make a per-frame upload ring
   VkBufferObj staging{};
-  if (!staging.init(m_physicalDevice, m_device, size,
-                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+  if (!staging.init(m_allocator, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                    VkBufferObj::MemUsage::CpuToGpu)) {
     std::cerr << "[Uploader] Failed to create staging buffer\n";
     return false;
   }
@@ -58,9 +55,9 @@ bool VkBufferUploader::uploadToDeviceLocalBuffer(const void *data,
   }
 
   outBuffer.shutdown();
-  if (!outBuffer.init(m_physicalDevice, m_device, size,
+  if (!outBuffer.init(m_allocator, size,
                       finalUsage | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
+                      VkBufferObj::MemUsage::GpuOnly)) {
     std::cerr << "[Uploader] Failed to create index buffer\n";
     return false;
   }

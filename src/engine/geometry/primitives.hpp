@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../mesh/mesh_data.hpp"
+#include "engine/mesh/mesh_data.hpp"
 
 namespace engine::primitives {
 

@@ -6,7 +6,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+find_package(glfw3 CONFIG REQUIRED)
+
+find_package(glm CONFIG REQUIRED)
+
+find_package(Stb REQUIRED)
+
 find_package(Vulkan REQUIRED)
+find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 
 add_compile_options(
   $<$<COMPILE_LANGUAGE:CXX>:-Wall>

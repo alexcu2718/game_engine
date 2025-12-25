@@ -1,4 +1,5 @@
 #include "primitives.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -6,6 +7,7 @@
 
 namespace engine::primitives {
 
+// TODO: update all to use UV's
 MeshData triangle() {
   MeshData m;
   m.vertices = {

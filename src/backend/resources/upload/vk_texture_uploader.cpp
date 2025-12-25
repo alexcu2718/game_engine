@@ -1,22 +1,23 @@
 #include "vk_texture_uploader.hpp"
 
-#include "../buffers/vk_buffer.hpp"
-#include "../textures/vk_texture.hpp"
-#include "../textures/vk_texture_utils.hpp"
+#include "backend/resources/buffers/vk_buffer.hpp"
+#include "backend/resources/textures/vk_texture.hpp"
+#include "backend/resources/textures/vk_texture_utils.hpp"
 
 #include <cstdint>
 #include <iostream>
+#include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 
-bool VkTextureUploader::init(VkPhysicalDevice physicalDevice, VkDevice device,
+bool VkTextureUploader::init(VmaAllocator allocator, VkDevice device,
                              VkQueue queue, VkCommands *commands) {
-  if (physicalDevice == VK_NULL_HANDLE || device == VK_NULL_HANDLE ||
+  if (allocator == nullptr || device == VK_NULL_HANDLE ||
       queue == VK_NULL_HANDLE || commands == nullptr) {
     std::cerr << "[TextureUpload] Invalid init args\n";
     return false;
   }
 
-  m_physicalDevice = physicalDevice;
+  m_allocator = allocator;
   m_device = device;
   m_queue = queue;
   m_commands = commands;
@@ -25,7 +26,7 @@ bool VkTextureUploader::init(VkPhysicalDevice physicalDevice, VkDevice device,
 }
 
 void VkTextureUploader::shutdown() noexcept {
-  m_physicalDevice = VK_NULL_HANDLE;
+  m_allocator = nullptr;
   m_device = VK_NULL_HANDLE;
   m_queue = VK_NULL_HANDLE;
   m_commands = nullptr;
@@ -88,8 +89,8 @@ void VkTextureUploader::cmdTransitionImage(VkCommandBuffer cmd, VkImage image,
 
 bool VkTextureUploader::uploadRGBA8(const void *rgbaPixels, uint32_t width,
                                     uint32_t height, VkTexture2D &out) {
-  if (m_device == VK_NULL_HANDLE || m_physicalDevice == VK_NULL_HANDLE ||
-      m_queue == VK_NULL_HANDLE || m_commands == nullptr) {
+  if (m_allocator == nullptr || m_queue == VK_NULL_HANDLE ||
+      m_commands == nullptr) {
     std::cerr << "[TextureUpload] Not initialized\n";
     return false;
   }
@@ -105,10 +106,8 @@ bool VkTextureUploader::uploadRGBA8(const void *rgbaPixels, uint32_t width,
   // Staging buffer: CPU-visible
   // TODO: persist the staging buffer instead of remaking it per upload
   VkBufferObj staging{};
-  if (!staging.init(m_physicalDevice, m_device, byteSize,
-                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+  if (!staging.init(m_allocator, byteSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                    VkBufferObj::MemUsage::CpuToGpu)) {
     std::cerr << "[TextureUpload] Failed to create staging buffer\n";
     return false;
   }
@@ -120,10 +119,10 @@ bool VkTextureUploader::uploadRGBA8(const void *rgbaPixels, uint32_t width,
 
   out.shutdown();
   // TODO: check for VK_FORMAT_R8G8B8A8_UNORM
-  if (!out.image.init2D(
-          m_physicalDevice, m_device, width, height, VK_FORMAT_R8G8B8A8_SRGB,
-          VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
+  if (!out.image.init2D(m_allocator, width, height, VK_FORMAT_R8G8B8A8_SRGB,
+                        VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                            VK_IMAGE_USAGE_SAMPLED_BIT,
+                        VK_IMAGE_TILING_OPTIMAL)) {
     std::cerr << "[TextureUpload] Failed to create device-local image\n";
     return false;
   }

@@ -1,40 +1,35 @@
 #include "vk_buffer.hpp"
 
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 
-static bool findMemoryTypeIndex(VkPhysicalDevice physicalDevice,
-                                uint32_t typeBits, VkMemoryPropertyFlags props,
-                                uint32_t &outIndex) {
-  VkPhysicalDeviceMemoryProperties memoryProperties{};
-  vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
-
-  for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i) {
-    const bool typeOk = (typeBits & (1U << i)) != 0;
-    const bool propsOk =
-        (memoryProperties.memoryTypes[i].propertyFlags & props) == props;
-    if (typeOk && propsOk) {
-      outIndex = i;
-      return true;
-    }
+static VmaMemoryUsage toVmaUsage(VkBufferObj::MemUsage usage) {
+  switch (usage) {
+  case VkBufferObj::MemUsage::GpuOnly:
+    return VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+  case VkBufferObj::MemUsage::CpuToGpu:
+    return VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
+  case VkBufferObj::MemUsage::GpuToCpu:
+    return VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
   }
-  return false;
+
+  return VMA_MEMORY_USAGE_AUTO;
 }
 
-bool VkBufferObj::init(VkPhysicalDevice physicalDevice, VkDevice device,
-                       VkDeviceSize size, VkBufferUsageFlags usage,
-                       VkMemoryPropertyFlags memProps) {
-
-  if (device == VK_NULL_HANDLE || physicalDevice == VK_NULL_HANDLE) {
-    std::cerr << "[Buffer] init: invalid args\n";
+bool VkBufferObj::init(VmaAllocator allocator, VkDeviceSize size,
+                       VkBufferUsageFlags usage, MemUsage memUsage,
+                       bool mapped) {
+  if (allocator == nullptr || size == 0) {
+    std::cerr << "[Buffer] init invalid args\n";
     return false;
   }
 
   shutdown();
-  m_device = device;
+
+  m_allocator = allocator;
 
   VkBufferCreateInfo bufferInfo{};
   bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -42,39 +37,23 @@ bool VkBufferObj::init(VkPhysicalDevice physicalDevice, VkDevice device,
   bufferInfo.usage = usage;
   bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-  VkResult res = vkCreateBuffer(device, &bufferInfo, nullptr, &m_buffer);
-  if (res != VK_SUCCESS) {
-    std::cerr << "[Buffer] vkCreateBuffer failed: " << res << "\n";
-    m_buffer = VK_NULL_HANDLE;
-    return false;
+  VmaAllocationCreateInfo allocInfo{};
+  allocInfo.usage = toVmaUsage(memUsage);
+
+  if (memUsage == MemUsage::CpuToGpu) {
+    allocInfo.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+  } else if (memUsage == MemUsage::GpuToCpu) {
+    allocInfo.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
   }
 
-  VkMemoryRequirements memReq{};
-  vkGetBufferMemoryRequirements(device, m_buffer, &memReq);
-
-  uint32_t memIndex = 0;
-  if (!findMemoryTypeIndex(physicalDevice, memReq.memoryTypeBits, memProps,
-                           memIndex)) {
-    std::cerr << "[Buffer] No suitable memory type\n";
-    shutdown();
-    return false;
+  if (mapped) {
+    allocInfo.flags |= VMA_ALLOCATION_CREATE_MAPPED_BIT;
   }
 
-  VkMemoryAllocateInfo allocateInfo{};
-  allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  allocateInfo.allocationSize = memReq.size;
-  allocateInfo.memoryTypeIndex = memIndex;
-
-  res = vkAllocateMemory(device, &allocateInfo, nullptr, &m_memory);
+  VkResult res = vmaCreateBuffer(m_allocator, &bufferInfo, &allocInfo,
+                                 &m_buffer, &m_allocation, nullptr);
   if (res != VK_SUCCESS) {
-    std::cerr << "[Buffer] vkAllocateMemory failed: " << res << "\n";
-    shutdown();
-    return false;
-  }
-
-  res = vkBindBufferMemory(device, m_buffer, m_memory, 0);
-  if (res != VK_SUCCESS) {
-    std::cerr << "[Buffer] vkBindBufferMemory failed: " << res << "\n";
+    std::cerr << "[Buffer] vmaCreateBuffer failed: " << res << "\n";
     shutdown();
     return false;
   }
@@ -85,9 +64,9 @@ bool VkBufferObj::init(VkPhysicalDevice physicalDevice, VkDevice device,
 
 bool VkBufferObj::upload(const void *data, VkDeviceSize size,
                          VkDeviceSize offset) {
-  if (!valid() || data == nullptr || m_memory == VK_NULL_HANDLE ||
+  if (!valid() || data == nullptr || m_allocation == nullptr ||
       data == nullptr) {
-    std::cerr << "[Buffer] upload: invalids args\n";
+    std::cerr << "[Buffer] upload invalids args\n";
     return false;
   }
 
@@ -98,30 +77,26 @@ bool VkBufferObj::upload(const void *data, VkDeviceSize size,
   }
 
   void *mapped = nullptr;
-  VkResult res = vkMapMemory(m_device, m_memory, offset, size, 0, &mapped);
-  if (res != VK_SUCCESS) {
+  VkResult res = vmaMapMemory(m_allocator, m_allocation, &mapped);
+  if (res != VK_SUCCESS || !mapped) {
     std::cerr << "[Buffer] vkMapMemory failed: " << res << "\n";
     return false;
   }
 
-  std::memcpy(mapped, data, static_cast<size_t>(size));
-  vkUnmapMemory(m_device, m_memory);
+  std::memcpy(static_cast<std::byte *>(mapped) + offset, data,
+              static_cast<size_t>(size));
+  vmaUnmapMemory(m_allocator, m_allocation);
   return true;
 }
 
 void VkBufferObj::shutdown() noexcept {
-  if (m_device != VK_NULL_HANDLE) {
-    if (m_buffer != VK_NULL_HANDLE) {
-      vkDestroyBuffer(m_device, m_buffer, nullptr);
-    }
-
-    if (m_memory != VK_NULL_HANDLE) {
-      vkFreeMemory(m_device, m_memory, nullptr);
-    }
+  if (m_allocator != nullptr && m_buffer != VK_NULL_HANDLE &&
+      m_allocation == nullptr) {
+    vmaDestroyBuffer(m_allocator, m_buffer, m_allocation);
   }
 
   m_buffer = VK_NULL_HANDLE;
-  m_memory = VK_NULL_HANDLE;
+  m_allocation = nullptr;
+  m_allocator = nullptr;
   m_size = 0;
-  m_device = VK_NULL_HANDLE;
 }

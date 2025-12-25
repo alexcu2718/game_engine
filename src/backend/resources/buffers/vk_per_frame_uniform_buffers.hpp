@@ -3,7 +3,9 @@
 #include "vk_buffer.hpp"
 
 #include <cstdint>
+#include <utility>
 #include <vector>
+#include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 
 class VkPerFrameUniformBuffers {
@@ -26,15 +28,15 @@ public:
 
     shutdown();
 
-    m_device = std::exchange(other.m_device, VK_NULL_HANDLE);
+    m_allocator = std::exchange(other.m_allocator, nullptr);
     m_bufs = std::move(other.m_bufs);
     m_stride = std::exchange(other.m_stride, 0);
 
     return *this;
   }
 
-  bool init(VkPhysicalDevice physicalDevice, VkDevice device,
-            uint32_t framesInFlight, VkDeviceSize strideBytes);
+  bool init(VmaAllocator allocator, uint32_t framesInFlight,
+            VkDeviceSize strideBytes);
   void shutdown() noexcept;
 
   bool update(uint32_t frameIndex, const void *data, VkDeviceSize size);
@@ -51,7 +53,7 @@ public:
   }
 
 private:
-  VkDevice m_device = VK_NULL_HANDLE; // non-owning
+  VmaAllocator m_allocator = nullptr; // non-owning
   std::vector<VkBufferObj> m_bufs;    // owning
   VkDeviceSize m_stride = 0;
 };

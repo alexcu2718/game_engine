@@ -1,12 +1,14 @@
 #include "camera.hpp"
+
 #include "camera_ubo.hpp"
-#include "glm/ext/matrix_clip_space.hpp"
-#include "glm/ext/matrix_transform.hpp"
-#include "glm/ext/vector_float3.hpp"
-#include "glm/geometric.hpp"
-#include "glm/trigonometric.hpp"
+
 #include <algorithm>
 #include <cmath>
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/matrix_transform.hpp>
+#include <glm/ext/vector_float3.hpp>
+#include <glm/geometric.hpp>
+#include <glm/trigonometric.hpp>
 #include <vulkan/vulkan_core.h>
 
 static float clampf(float v, float lo, float hi) {

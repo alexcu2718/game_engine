@@ -1,6 +1,7 @@
 #pragma once
 
 #include <utility>
+#include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 
 class VkBufferObj {
@@ -19,16 +20,18 @@ public:
 
     shutdown();
 
-    m_device = std::exchange(other.m_device, VK_NULL_HANDLE);
+    m_allocator = std::exchange(other.m_allocator, nullptr);
     m_buffer = std::exchange(other.m_buffer, VK_NULL_HANDLE);
-    m_memory = std::exchange(other.m_memory, VK_NULL_HANDLE);
+    m_allocation = std::exchange(other.m_allocation, nullptr);
     m_size = std::exchange(other.m_size, 0);
 
     return *this;
   }
 
-  bool init(VkPhysicalDevice physicalDevice, VkDevice device, VkDeviceSize size,
-            VkBufferUsageFlags usage, VkMemoryPropertyFlags memProps);
+  enum class MemUsage { GpuOnly, CpuToGpu, GpuToCpu };
+
+  bool init(VmaAllocator allocator, VkDeviceSize size, VkBufferUsageFlags usage,
+            MemUsage memUsage, bool mapped = false);
   void shutdown() noexcept;
 
   bool upload(const void *data, VkDeviceSize size, VkDeviceSize offset = 0);
@@ -40,8 +43,9 @@ public:
   }
 
 private:
-  VkDevice m_device = VK_NULL_HANDLE;       // no-owning
+  VmaAllocator m_allocator = nullptr;       // non-owning
   VkBuffer m_buffer = VK_NULL_HANDLE;       // owning
   VkDeviceMemory m_memory = VK_NULL_HANDLE; // owning
+  VmaAllocation m_allocation = nullptr;
   VkDeviceSize m_size = 0;
 };

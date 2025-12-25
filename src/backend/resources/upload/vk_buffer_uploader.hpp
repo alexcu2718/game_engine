@@ -1,17 +1,16 @@
 #pragma once
 
-#include "../../frame/vk_commands.hpp"
+#include "backend/frame/vk_commands.hpp"
+#include "backend/resources/buffers/vk_buffer.hpp"
 
-#include "../buffers/vk_buffer.hpp"
-
+#include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 
 class VkBufferUploader {
 public:
   VkBufferUploader() = default;
 
-  bool init(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue queue,
-            VkCommands *commands);
+  bool init(VmaAllocator allocator, VkQueue queue, VkCommands *commands);
   void shutdown() noexcept;
 
   bool uploadToDeviceLocalBuffer(const void *data, VkDeviceSize size,
@@ -19,8 +18,7 @@ public:
                                  VkBufferObj &outBuffer);
 
 private:
-  VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE; // non-owning
-  VkDevice m_device = VK_NULL_HANDLE;                 // non-owning
-  VkQueue m_queue = VK_NULL_HANDLE;                   // non-owning
-  VkCommands *m_commands = nullptr;                   // non-owning
+  VmaAllocator m_allocator = nullptr; // non-owning
+  VkQueue m_queue = VK_NULL_HANDLE;   // non-owning
+  VkCommands *m_commands = nullptr;   // non-owning
 };

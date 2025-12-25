@@ -4,7 +4,7 @@ add_library(engine_camera STATIC
 
 target_include_directories(engine_camera
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/src
 )
 
 target_link_libraries(engine_camera

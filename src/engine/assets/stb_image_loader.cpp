@@ -1,4 +1,5 @@
 #include "stb_image_loader.hpp"
+
 #include "image_data.hpp"
 
 #include <cstddef>

@@ -1,6 +1,6 @@
 #include "vk_commands.hpp"
 
-#include "../core/vk_backend_ctx.hpp"
+#include "backend/core/vk_backend_ctx.hpp"
 
 #include <cstdint>
 #include <functional>
@@ -19,12 +19,8 @@ bool VkCommands::init(VkBackendCtx &ctx, VkCommandPoolCreateFlags flags) {
     return false;
   }
 
-  std::cout << "before shutdown\n";
-
   // Re-init
   shutdown();
-
-  std::cout << "after shutdown\n";
 
   m_ctx = &ctx;
 

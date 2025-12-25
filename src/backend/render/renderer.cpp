@@ -1,9 +1,9 @@
 #include "renderer.hpp"
 
-#include "../../engine/assets/stb_image_loader.hpp"
-#include "../../engine/mesh/vertex.hpp"
-#include "../presentation/vk_presenter.hpp"
-#include "../resources/buffers/vk_buffer.hpp"
+#include "backend/core/vk_backend_ctx.hpp"
+#include "backend/resources/buffers/vk_buffer.hpp"
+#include "engine/assets/stb_image_loader.hpp"
+#include "engine/mesh/vertex.hpp"
 #include "mesh_gpu.hpp"
 
 #include <array>
@@ -44,8 +44,9 @@ bool Renderer::init(VkBackendCtx &ctx, VkPresenter &presenter,
 
   VkDevice device = m_ctx->device();
   VkPhysicalDevice physicalDevice = m_ctx->physicalDevice();
+  VmaAllocator allocator = m_ctx->allocator();
 
-  if (!m_depth.init(physicalDevice, device, presenter.extent())) {
+  if (!m_depth.init(allocator, physicalDevice, device, presenter.extent())) {
     std::cerr << "[Renderer] Failed to create depth buffer\n";
     shutdown();
     return false;
@@ -89,8 +90,7 @@ bool Renderer::init(VkBackendCtx &ctx, VkPresenter &presenter,
     return false;
   }
 
-  if (!m_perFrameBufs.init(physicalDevice, device, m_framesInFlight,
-                           sizeof(CameraUBO))) {
+  if (!m_perFrameBufs.init(allocator, m_framesInFlight, sizeof(CameraUBO))) {
     std::cerr << "[Renderer] Failed to init camera UBO\n";
     shutdown();
     return false;
@@ -103,14 +103,13 @@ bool Renderer::init(VkBackendCtx &ctx, VkPresenter &presenter,
     return false;
   }
 
-  if (!m_uploader.init(physicalDevice, device, m_ctx->graphicsQueue(),
-                       &m_commands)) {
+  if (!m_uploader.init(allocator, m_ctx->graphicsQueue(), &m_commands)) {
     std::cerr << "[Renderer] Failed to init uploader\n";
     shutdown();
     return false;
   }
 
-  if (!m_textureUploader.init(physicalDevice, device, m_ctx->graphicsQueue(),
+  if (!m_textureUploader.init(allocator, device, m_ctx->graphicsQueue(),
                               &m_commands)) {
     std::cerr << "[Renderer] Failed to init texture uploader\n";
     shutdown();
@@ -387,7 +386,8 @@ bool Renderer::recreateSwapchainDependent(VkPresenter &presenter,
     m_depth.shutdown();
 
     // Recreate depth
-    if (!m_depth.init(m_ctx->physicalDevice(), device, presenter.extent())) {
+    if (!m_depth.init(m_ctx->allocator(), m_ctx->physicalDevice(), device,
+                      presenter.extent())) {
       return false;
     }
   }

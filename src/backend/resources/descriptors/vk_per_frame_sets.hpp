@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../buffers/vk_per_frame_uniform_buffers.hpp"
+#include "backend/resources/buffers/vk_per_frame_uniform_buffers.hpp"
 
 #include <cstdint>
 #include <utility>

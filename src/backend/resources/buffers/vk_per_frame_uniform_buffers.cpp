@@ -2,28 +2,27 @@
 
 #include <cstdint>
 #include <iostream>
+#include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 
-bool VkPerFrameUniformBuffers::init(VkPhysicalDevice physicalDevice,
-                                    VkDevice device, uint32_t framesInFlight,
+bool VkPerFrameUniformBuffers::init(VmaAllocator allocator,
+                                    uint32_t framesInFlight,
                                     VkDeviceSize strideBytes) {
-  if (physicalDevice == VK_NULL_HANDLE || device == VK_NULL_HANDLE ||
-      framesInFlight == 0 || strideBytes == 0) {
+  if (allocator == nullptr || framesInFlight == 0 || strideBytes == 0) {
     std::cerr << "[PerFrameUBOBufs] Invalid init args\n";
     return false;
   }
 
   shutdown();
-  m_device = device;
+
+  m_allocator = allocator;
   m_stride = strideBytes;
 
   // Buffers
   m_bufs.resize(framesInFlight);
   for (uint32_t i = 0; i < framesInFlight; ++i) {
-    if (!m_bufs[i].init(physicalDevice, m_device, m_stride,
-                        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+    if (!m_bufs[i].init(allocator, m_stride, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                        VkBufferObj::MemUsage::CpuToGpu, /*mapped=*/true)) {
       std::cerr << "[PerFrameUBOBufs] Failed to create UBO\n";
       shutdown();
       return false;
@@ -40,7 +39,7 @@ void VkPerFrameUniformBuffers::shutdown() noexcept {
 
   m_bufs.clear();
   m_stride = 0;
-  m_device = VK_NULL_HANDLE;
+  m_allocator = nullptr;
 }
 
 bool VkPerFrameUniformBuffers::update(uint32_t frameIndex, const void *data,

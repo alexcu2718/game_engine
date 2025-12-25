@@ -1,20 +1,20 @@
 #pragma once
 
-#include "../../engine/assets/image_data.hpp"
-#include "../../engine/camera/camera_ubo.hpp"
-#include "../../engine/mesh/vertex.hpp"
-#include "../core/vk_backend_ctx.hpp"
-#include "../frame/vk_commands.hpp"
-#include "../frame/vk_frame_manager.hpp"
-#include "../presentation/vk_presenter.hpp"
-#include "../resources/buffers/vk_per_frame_uniform_buffers.hpp"
-#include "../resources/descriptors/vk_material_sets.hpp"
-#include "../resources/descriptors/vk_per_frame_sets.hpp"
-#include "../resources/descriptors/vk_shader_interface.hpp"
-#include "../resources/images/vk_depth_image.hpp"
-#include "../resources/textures/vk_texture.hpp"
-#include "../resources/upload/vk_buffer_uploader.hpp"
-#include "../resources/upload/vk_texture_uploader.hpp"
+#include "backend/core/vk_backend_ctx.hpp"
+#include "backend/frame/vk_commands.hpp"
+#include "backend/frame/vk_frame_manager.hpp"
+#include "backend/presentation/vk_presenter.hpp"
+#include "backend/resources/buffers/vk_per_frame_uniform_buffers.hpp"
+#include "backend/resources/descriptors/vk_material_sets.hpp"
+#include "backend/resources/descriptors/vk_per_frame_sets.hpp"
+#include "backend/resources/descriptors/vk_shader_interface.hpp"
+#include "backend/resources/images/vk_depth_image.hpp"
+#include "backend/resources/textures/vk_texture.hpp"
+#include "backend/resources/upload/vk_buffer_uploader.hpp"
+#include "backend/resources/upload/vk_texture_uploader.hpp"
+#include "engine/assets/image_data.hpp"
+#include "engine/camera/camera_ubo.hpp"
+#include "engine/mesh/vertex.hpp"
 #include "mesh_gpu.hpp"
 #include "vk_framebuffers.hpp"
 #include "vk_pipeline.hpp"
@@ -27,6 +27,7 @@
 #include <vulkan/vulkan_core.h>
 
 class VkPresenter;
+class VkBackendCtx;
 
 struct MeshHandle {
   uint32_t id = 0;
@@ -54,11 +55,6 @@ public:
     shutdown();
 
     m_ctx = std::exchange(other.m_ctx, nullptr);
-    // m_device = std::exchange(other.m_device, VK_NULL_HANDLE);
-    // m_physicalDevice = std::exchange(other.m_physicalDevice, VK_NULL_HANDLE);
-    // m_graphicsQueue = std::exchange(other.m_graphicsQueue, VK_NULL_HANDLE);
-    // m_graphicsQueueFamily =
-    //     std::exchange(other.m_graphicsQueueFamily, UINT32_MAX);
 
     m_framesInFlight = std::exchange(other.m_framesInFlight, 0U);
 
@@ -80,8 +76,7 @@ public:
     m_meshes = std::move(other.m_meshes);
 
     // Fix uploader pointer to refer to this renderer's commands
-    m_uploader.init(m_ctx->physicalDevice(), m_ctx->device(),
-                    m_ctx->graphicsQueue(), &m_commands);
+    m_uploader.init(m_ctx->allocator(), m_ctx->graphicsQueue(), &m_commands);
 
     m_renderPass = std::move(other.m_renderPass);
     m_pipeline = std::move(other.m_pipeline);

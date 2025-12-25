@@ -1,7 +1,9 @@
 #include "camera_controller.hpp"
-#include "../../engine/camera/camera.hpp"
-#include "glm/ext/vector_float3.hpp"
+
+#include "engine/camera/camera.hpp"
+
 #include <GLFW/glfw3.h>
+#include <glm/ext/vector_float3.hpp>
 
 CameraController::CameraController(GLFWwindow *window, Camera *camera)
     : m_window(window), m_camera(camera) {}

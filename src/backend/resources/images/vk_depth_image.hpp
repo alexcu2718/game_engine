@@ -1,8 +1,9 @@
 #pragma once
 
-#include "../images/vk_image.hpp"
+#include "backend/resources/images/vk_image.hpp"
 
 #include <utility>
+#include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 
 class VkDepthImage {
@@ -21,6 +22,7 @@ public:
 
     shutdown();
 
+    m_allocator = std::exchange(other.m_allocator, nullptr);
     m_device = std::exchange(other.m_device, VK_NULL_HANDLE);
     m_image = std::move(other.m_image);
     m_view = std::exchange(other.m_view, VK_NULL_HANDLE);
@@ -30,8 +32,8 @@ public:
     return *this;
   }
 
-  bool init(VkPhysicalDevice physicalDevice, VkDevice device,
-            VkExtent2D extent);
+  bool init(VmaAllocator allocator, VkPhysicalDevice physicalDevice,
+            VkDevice device, VkExtent2D extent);
   void shutdown() noexcept;
 
   [[nodiscard]] VkImage image() const noexcept { return m_image.handle(); }
@@ -44,6 +46,7 @@ private:
   static bool findSupportedDepthFormat(VkPhysicalDevice physicalDevice,
                                        VkFormat &out);
 
+  VmaAllocator m_allocator = nullptr;  // non-owning
   VkDevice m_device = VK_NULL_HANDLE;  // non-owning
   VkImageObj m_image;                  // owning
   VkImageView m_view = VK_NULL_HANDLE; // owning

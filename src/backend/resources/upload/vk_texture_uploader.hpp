@@ -1,15 +1,15 @@
 #pragma once
 
-#include "../textures/vk_texture.hpp"
-
-#include "../../frame/vk_commands.hpp"
+#include "backend/frame/vk_commands.hpp"
+#include "backend/resources/textures/vk_texture.hpp"
 
 #include <cstdint>
+#include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 
 class VkTextureUploader {
 public:
-  bool init(VkPhysicalDevice physicalDevice, VkDevice device, VkQueue queue,
+  bool init(VmaAllocator allocator, VkDevice device, VkQueue queue,
             VkCommands *commands);
   void shutdown() noexcept;
 
@@ -17,10 +17,10 @@ public:
                    VkTexture2D &out);
 
 private:
-  VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE; // non-owning
-  VkDevice m_device = VK_NULL_HANDLE;                 // non-owning
-  VkQueue m_queue = VK_NULL_HANDLE;                   // non-owning
-  VkCommands *m_commands = nullptr;                   // non-owning
+  VmaAllocator m_allocator = nullptr; // non-owning
+  VkDevice m_device = VK_NULL_HANDLE; // non-owning
+  VkQueue m_queue = VK_NULL_HANDLE;   // non-owning
+  VkCommands *m_commands = nullptr;   // non-owning
 
   static void cmdTransitionImage(VkCommandBuffer cmd, VkImage image,
                                  VkImageLayout oldLayout,

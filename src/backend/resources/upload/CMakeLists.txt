@@ -5,12 +5,15 @@ add_library(engine_resources_upload STATIC
 
 target_include_directories(engine_resources_upload
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}
+      ${CMAKE_SOURCE_DIR}/src
 )
 
 target_link_libraries(engine_resources_upload
     PUBLIC
-        Vulkan::Vulkan
+      Vulkan::Vulkan
+      engine::frame
+      # engine::resources::buffers
+      GPUOpen::VulkanMemoryAllocator
 )
 
 add_library(engine::resources::upload ALIAS engine_resources_upload)

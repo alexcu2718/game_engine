@@ -1,6 +1,7 @@
 #pragma once
 
 #include <utility>
+#include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 
 class VkImageObj {
@@ -19,9 +20,9 @@ public:
 
     shutdown();
 
-    m_device = std::exchange(other.m_device, VK_NULL_HANDLE);
+    m_allocator = std::exchange(other.m_allocator, nullptr);
     m_image = std::exchange(other.m_image, VK_NULL_HANDLE);
-    m_memory = std::exchange(other.m_memory, VK_NULL_HANDLE);
+    m_allocation = std::exchange(other.m_allocation, nullptr);
     m_format = std::exchange(other.m_format, VK_FORMAT_UNDEFINED);
     m_width = std::exchange(other.m_width, 0U);
     m_height = std::exchange(other.m_height, 0U);
@@ -29,9 +30,8 @@ public:
     return *this;
   }
 
-  bool init2D(VkPhysicalDevice physicalDevice, VkDevice device, uint32_t width,
-              uint32_t height, VkFormat format, VkImageUsageFlags usage,
-              VkMemoryPropertyFlags memProps,
+  bool init2D(VmaAllocator allocator, uint32_t width, uint32_t height,
+              VkFormat format, VkImageUsageFlags usage,
               VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL);
   void shutdown() noexcept;
 
@@ -44,9 +44,9 @@ public:
   [[nodiscard]] uint32_t height() const noexcept { return m_height; }
 
 private:
-  VkDevice m_device = VK_NULL_HANDLE;       // non-owning
-  VkImage m_image = VK_NULL_HANDLE;         // owning
-  VkDeviceMemory m_memory = VK_NULL_HANDLE; // owning
+  VmaAllocator m_allocator = nullptr;   // non-owning
+  VkImage m_image = VK_NULL_HANDLE;     // owning
+  VmaAllocation m_allocation = nullptr; // owning
   VkFormat m_format = VK_FORMAT_UNDEFINED;
   uint32_t m_width = 0;
   uint32_t m_height = 0;

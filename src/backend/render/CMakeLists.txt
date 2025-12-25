@@ -7,13 +7,14 @@ add_library(engine_render STATIC
 
 target_include_directories(engine_render
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/src
 )
 
 target_link_libraries(engine_render
     PUBLIC
         engine::frame
         engine::presentation
+        engine::core
         Vulkan::Vulkan
         glm::glm
 )

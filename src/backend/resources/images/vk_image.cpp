@@ -1,25 +1,22 @@
 #include "vk_image.hpp"
 
-#include "../buffers/vk_memory_utils.hpp"
-
 #include <cstdint>
 #include <iostream>
+#include <vk_mem_alloc.h>
 #include <vulkan/vulkan_core.h>
 
-bool VkImageObj::init2D(VkPhysicalDevice physicalDevice, VkDevice device,
-                        uint32_t width, uint32_t height, VkFormat format,
-                        VkImageUsageFlags usage, VkMemoryPropertyFlags memProps,
+bool VkImageObj::init2D(VmaAllocator allocator, uint32_t width, uint32_t height,
+                        VkFormat format, VkImageUsageFlags usage,
                         VkImageTiling tiling) {
-  if (physicalDevice == VK_NULL_HANDLE || device == VK_NULL_HANDLE ||
-      width == 0 || height == 0 || format == VK_FORMAT_UNDEFINED) {
+  if (allocator == nullptr || width == 0 || height == 0 ||
+      format == VK_FORMAT_UNDEFINED) {
     std::cerr << "[Image] init2D invalid args\n";
     return false;
   }
 
-  // Re-init
   shutdown();
 
-  m_device = device;
+  m_allocator = allocator;
   m_format = format;
   m_width = width;
   m_height = height;
@@ -37,39 +34,13 @@ bool VkImageObj::init2D(VkPhysicalDevice physicalDevice, VkDevice device,
   imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
   imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-  VkResult res = vkCreateImage(m_device, &imageInfo, nullptr, &m_image);
+  VmaAllocationCreateInfo allocInfo{};
+  allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE; // GPU only intent
+
+  VkResult res = vmaCreateImage(m_allocator, &imageInfo, &allocInfo, &m_image,
+                                &m_allocation, nullptr);
   if (res != VK_SUCCESS) {
     std::cerr << "[Image] vkCreateImage failed: " << res << "\n";
-    shutdown();
-    return false;
-  }
-
-  VkMemoryRequirements memReq{};
-  vkGetImageMemoryRequirements(m_device, m_image, &memReq);
-
-  uint32_t memIndex = 0;
-  if (!vkFindMemoryTypeIndex(physicalDevice, memReq.memoryTypeBits, memProps,
-                             memIndex)) {
-    std::cerr << "[Image] No suitable memory type\n";
-    shutdown();
-    return false;
-  }
-
-  VkMemoryAllocateInfo allocInfo{};
-  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  allocInfo.allocationSize = memReq.size;
-  allocInfo.memoryTypeIndex = memIndex;
-
-  res = vkAllocateMemory(m_device, &allocInfo, nullptr, &m_memory);
-  if (res != VK_SUCCESS) {
-    std::cerr << "[Image] vkBindImageMemory failed: " << res << "\n";
-    shutdown();
-    return false;
-  }
-
-  res = vkBindImageMemory(device, m_image, m_memory, 0);
-  if (res != VK_SUCCESS) {
-    std::cerr << "[Image] vkBindImageMemory failed: " << res << "\n";
     shutdown();
     return false;
   }
@@ -78,20 +49,15 @@ bool VkImageObj::init2D(VkPhysicalDevice physicalDevice, VkDevice device,
 }
 
 void VkImageObj::shutdown() noexcept {
-  if (m_device != VK_NULL_HANDLE) {
-    if (m_image != VK_NULL_HANDLE) {
-      vkDestroyImage(m_device, m_image, nullptr);
-    }
-
-    if (m_memory != VK_NULL_HANDLE) {
-      vkFreeMemory(m_device, m_memory, nullptr);
-    }
+  if (m_allocator != nullptr && m_image != VK_NULL_HANDLE &&
+      m_allocation != nullptr) {
+    vmaDestroyImage(m_allocator, m_image, m_allocation);
   }
 
   m_image = VK_NULL_HANDLE;
-  m_memory = VK_NULL_HANDLE;
+  m_allocation = nullptr;
+  m_allocator = nullptr;
   m_format = VK_FORMAT_UNDEFINED;
   m_width = 0;
   m_height = 0;
-  m_device = VK_NULL_HANDLE;
 }
