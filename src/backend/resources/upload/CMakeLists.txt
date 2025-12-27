@@ -1,4 +1,4 @@
-add_library(quark_backend_resources_upload STATIC 
+add_library(quark_backend_resources_upload STATIC
     vk_buffer_uploader.cpp
     vk_texture_uploader.cpp
 )
@@ -13,6 +13,7 @@ target_link_libraries(quark_backend_resources_upload
       Vulkan::Vulkan
       quark::backend::frame
       GPUOpen::VulkanMemoryAllocator
+  quark::backend::resources::textures
 )
 
 add_library(quark::backend::resources::upload ALIAS quark_backend_resources_upload)

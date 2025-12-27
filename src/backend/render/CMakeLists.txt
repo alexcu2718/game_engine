@@ -1,4 +1,4 @@
-add_library(quark_backend_render STATIC 
+add_library(quark_backend_render STATIC
     renderer.cpp
     vk_framebuffers.cpp
     vk_pipeline.cpp
@@ -15,6 +15,9 @@ target_link_libraries(quark_backend_render
         quark::backend::frame
         quark::backend::presentation
         quark::backend::core
+    quark::backend::resources::upload
+    quark::engine::assets
+        quark::backend::shaders
         Vulkan::Vulkan
         glm::glm
 )
