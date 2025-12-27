@@ -9,6 +9,7 @@
 #include <glm/ext/vector_float2.hpp>
 #include <utility>
 #include <vector>
+
 namespace engine {
 
 class MeshBuilder {

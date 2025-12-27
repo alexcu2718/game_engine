@@ -1,5 +1,6 @@
 BUILD_DIR := build
 ANALYZE_DIR := build-analyze
+ENGINE_NAME := quark
 
 UNAME_S := $(shell uname -s)
 
@@ -8,9 +9,15 @@ VCPKG_HOST_TRIPLET ?=
 CMAKE_OSX_ARCHITECTURES ?=
 
 ifeq ($(UNAME_S),Darwin)
-VCPKG_TARGET_TRIPLET ?= arm64-osx
-VCPKG_HOST_TRIPLET ?= arm64-osx
-CMAKE_OSX_ARCHITECTURES ?= arm64
+  ifeq ($(strip $(VCPKG_TARGET_TRIPLET)),)
+    VCPKG_TARGET_TRIPLET := arm64-osx
+  endif
+  ifeq ($(strip $(VCPKG_HOST_TRIPLET)),)
+    VCPKG_HOST_TRIPLET := arm64-osx
+  endif
+  ifeq ($(strip $(CMAKE_OSX_ARCHITECTURES)),)
+    CMAKE_OSX_ARCHITECTURES := arm64
+  endif
 endif
 
 CMAKE_FLAGS := -G Ninja \
@@ -38,7 +45,7 @@ build: configure
 	cmake --build $(BUILD_DIR)
 
 run: build 
-	./$(BUILD_DIR)/src/engine_app
+	./$(BUILD_DIR)/src/$(ENGINE_NAME)
 
 configure-analyze:
 	VCPKG_DISABLE_METRICS=1 \

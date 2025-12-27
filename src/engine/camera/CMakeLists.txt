@@ -1,16 +1,16 @@
-add_library(engine_camera STATIC 
+add_library(quark_engine_camera STATIC 
     camera.cpp
 )
 
-target_include_directories(engine_camera
+target_include_directories(quark_engine_camera
     PUBLIC
         ${CMAKE_SOURCE_DIR}/src
 )
 
-target_link_libraries(engine_camera
+target_link_libraries(quark_engine_camera
     PUBLIC
         Vulkan::Vulkan
         glm::glm
 )
 
-add_library(engine::camera ALIAS engine_camera)
+add_library(quark::engine::camera ALIAS quark_engine_camera)

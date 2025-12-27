@@ -1,16 +1,17 @@
-add_library(engine_presentation STATIC 
+add_library(quark_backend_presentation STATIC 
     vk_presenter.cpp
     vk_swapchain.cpp
 )
 
-target_include_directories(engine_presentation
+target_include_directories(quark_backend_presentation
     PUBLIC
       ${CMAKE_SOURCE_DIR}/src     
 )
 
-target_link_libraries(engine_presentation
+target_link_libraries(quark_backend_presentation
     PUBLIC
         Vulkan::Vulkan
+        quark::backend::core
 )
 
-add_library(engine::presentation ALIAS engine_presentation)
+add_library(quark::backend::presentation ALIAS quark_backend_presentation)

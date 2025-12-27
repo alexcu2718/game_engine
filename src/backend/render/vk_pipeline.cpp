@@ -1,7 +1,7 @@
 #include "vk_pipeline.hpp"
 
-#include "../resources/vk_vertex_layout.hpp"
-#include "../shaders/vk_shader.hpp"
+#include "backend/resources/vk_vertex_layout.hpp"
+#include "backend/shaders/vk_shader.hpp"
 
 #include <array>
 #include <cstdint>

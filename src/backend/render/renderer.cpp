@@ -3,6 +3,8 @@
 #include "backend/core/vk_backend_ctx.hpp"
 #include "backend/resources/buffers/vk_buffer.hpp"
 #include "engine/assets/stb_image_loader.hpp"
+#include "engine/geometry/transform.hpp"
+#include "engine/mesh/mesh_data.hpp"
 #include "engine/mesh/vertex.hpp"
 #include "mesh_gpu.hpp"
 
@@ -14,6 +16,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/trigonometric.hpp>
 #include <iostream>
+#include <span>
 #include <string>
 #include <vector>
 #include <vulkan/vulkan_core.h>
@@ -226,6 +229,13 @@ MeshHandle Renderer::createMesh(const engine::Vertex *vertices,
   return MeshHandle{static_cast<uint32_t>(m_meshes.size() - 1)};
 }
 
+MeshHandle Renderer::createMesh(const engine::MeshData &mesh) {
+  return createMesh(mesh.vertices.data(),
+                    static_cast<std::uint32_t>(mesh.vertices.size()),
+                    mesh.indices.empty() ? nullptr : mesh.indices.data(),
+                    static_cast<std::uint32_t>(mesh.indices.size()));
+}
+
 const MeshGpu *Renderer::mesh(MeshHandle handle) const {
   if (handle.id >= m_meshes.size()) {
     return nullptr;
@@ -235,7 +245,19 @@ const MeshGpu *Renderer::mesh(MeshHandle handle) const {
 }
 
 void Renderer::recordFrame(VkCommandBuffer cmd, VkFramebuffer fb,
-                           VkExtent2D extent, const MeshGpu &mesh) {
+                           VkExtent2D extent, const MeshHandle mesh,
+                           uint32_t material, glm::vec3 pos, glm::vec3 rotRad,
+                           glm::vec3 scale) {
+  DrawItem item{};
+  item.mesh = mesh;
+  item.material = (material == UINT32_MAX) ? m_activeMaterial : material;
+  item.model = engine::makeModel(pos, rotRad, scale);
+
+  recordFrame(cmd, fb, extent, std::span<const DrawItem>(&item, 1));
+}
+
+void Renderer::recordFrame(VkCommandBuffer cmd, VkFramebuffer fb,
+                           VkExtent2D extent, std::span<const DrawItem> items) {
   VkCommandBufferBeginInfo beginInfo{};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   vkBeginCommandBuffer(cmd, &beginInfo);
@@ -258,21 +280,6 @@ void Renderer::recordFrame(VkCommandBuffer cmd, VkFramebuffer fb,
   vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                     m_pipeline.pipeline());
 
-  m_perFrameSets.bind(cmd, m_interface.pipelineLayout(), 0,
-                      m_frames.currentFrameIndex());
-  if (m_activeMaterial != UINT32_MAX) {
-    m_materials.bind(cmd, m_interface.pipelineLayout(), 1, m_activeMaterial);
-  }
-
-  // Push constant (model matrix)
-  glm::mat4 model = glm::mat4(1.0F);
-
-  // TODO REMOVE
-  model = glm::rotate(model, m_timeSeconds, glm::vec3(0.0F, 0.0F, 1.0F));
-
-  vkCmdPushConstants(cmd, m_interface.pipelineLayout(),
-                     VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &model);
-
   // Viewport / scissor
   VkViewport viewport{};
   viewport.x = 0.0F;
@@ -288,17 +295,35 @@ void Renderer::recordFrame(VkCommandBuffer cmd, VkFramebuffer fb,
   scissor.extent = extent;
   vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-  VkDeviceSize vertBufOffset = 0;
-  VkDeviceSize indexBufOffset = 0;
-  VkBuffer vertBuf = mesh.vertex.handle();
-  vkCmdBindVertexBuffers(cmd, 0, 1, &vertBuf, &vertBufOffset);
+  m_perFrameSets.bind(cmd, m_interface.pipelineLayout(), 0,
+                      m_frames.currentFrameIndex());
 
-  if (mesh.indexed()) {
-    vkCmdBindIndexBuffer(cmd, mesh.index.handle(), indexBufOffset,
-                         mesh.indexType);
-    vkCmdDrawIndexed(cmd, mesh.indexCount, 1, 0, 0, 0);
-  } else {
-    vkCmdDraw(cmd, mesh.vertexCount, 1, 0, 0);
+  for (const DrawItem &item : items) {
+    if (item.mesh.id >= m_meshes.size()) {
+      continue;
+    }
+
+    if (item.material != UINT32_MAX) {
+      m_materials.bind(cmd, m_interface.pipelineLayout(), 1, item.material);
+    }
+
+    vkCmdPushConstants(cmd, m_interface.pipelineLayout(),
+                       VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4),
+                       &item.model);
+
+    const MeshGpu &mesh = m_meshes[item.mesh.id];
+    VkDeviceSize vertBufOffset = 0;
+    VkDeviceSize indexBufOffset = 0;
+    VkBuffer vertBuf = mesh.vertex.handle();
+    vkCmdBindVertexBuffers(cmd, 0, 1, &vertBuf, &vertBufOffset);
+
+    if (mesh.indexed()) {
+      vkCmdBindIndexBuffer(cmd, mesh.index.handle(), indexBufOffset,
+                           mesh.indexType);
+      vkCmdDrawIndexed(cmd, mesh.indexCount, 1, 0, 0, 0);
+    } else {
+      vkCmdDraw(cmd, mesh.vertexCount, 1, 0, 0);
+    }
   }
 
   vkCmdEndRenderPass(cmd);
@@ -306,15 +331,18 @@ void Renderer::recordFrame(VkCommandBuffer cmd, VkFramebuffer fb,
 }
 
 bool Renderer::drawFrame(VkPresenter &presenter, MeshHandle mesh) {
+  DrawItem item{};
+  item.mesh = mesh;
+  item.material = m_activeMaterial;
+
+  return drawFrame(presenter, std::span<const DrawItem>(&item, 1));
+}
+
+bool Renderer::drawFrame(VkPresenter &presenter,
+                         std::span<const DrawItem> items) {
   if (m_ctx->device() == VK_NULL_HANDLE) {
     return false;
   }
-
-  // TODO REMOVE
-  static auto start = std::chrono::steady_clock::now();
-  auto now = std::chrono::steady_clock::now();
-  std::chrono::duration<float> dt = now - start;
-  m_timeSeconds = dt.count();
 
   using FrameStatus = VkFrameManager::FrameStatus;
 
@@ -338,8 +366,7 @@ bool Renderer::drawFrame(VkPresenter &presenter, MeshHandle mesh) {
   VkCommandBuffer cmd = m_commands.buffers()[frameIndex];
   vkResetCommandBuffer(cmd, 0);
 
-  recordFrame(cmd, m_framebuffers.at(imageIndex), presenter.extent(),
-              m_meshes[mesh.id]);
+  recordFrame(cmd, m_framebuffers.at(imageIndex), presenter.extent(), items);
 
   auto pst = m_frames.submitAndPresent(m_ctx->graphicsQueue(),
                                        presenter.swapchain(), imageIndex, cmd);
@@ -431,24 +458,6 @@ void Renderer::setActiveMaterial(uint32_t materialIndex) {
   m_activeMaterial = materialIndex;
 }
 
-bool Renderer::createTextureFromImage(const engine::ImageData &img,
-                                      VkTexture2D &outTex) {
-  if (!img.valid()) {
-    std::cerr << "[Renderer] createTextureFromImage invalid image\n";
-    return false;
-  }
-
-  const size_t expected = size_t(img.width) * img.height * 4ULL;
-  if (img.pixels.size() != expected) {
-    std::cerr << "[Renderer] Image byte size mismatch: have="
-              << img.pixels.size() << " expected=" << expected << "\n";
-    return false;
-  }
-
-  return m_textureUploader.uploadRGBA8(img.pixels.data(), img.width, img.height,
-                                       outTex);
-}
-
 TextureHandle Renderer::createTextureFromFile(const std::string &path,
                                               bool flipY) {
   engine::ImageData img;
@@ -466,4 +475,22 @@ TextureHandle Renderer::createTextureFromFile(const std::string &path,
 
   m_textures.push_back(std::move(tex));
   return TextureHandle{static_cast<uint32_t>(m_textures.size() - 1)};
+}
+
+bool Renderer::createTextureFromImage(const engine::ImageData &img,
+                                      VkTexture2D &outTex) {
+  if (!img.valid()) {
+    std::cerr << "[Renderer] createTextureFromImage invalid image\n";
+    return false;
+  }
+
+  const size_t expected = size_t(img.width) * img.height * 4ULL;
+  if (img.pixels.size() != expected) {
+    std::cerr << "[Renderer] Image byte size mismatch: have="
+              << img.pixels.size() << " expected=" << expected << "\n";
+    return false;
+  }
+
+  return m_textureUploader.uploadRGBA8(img.pixels.data(), img.width, img.height,
+                                       outTex);
 }

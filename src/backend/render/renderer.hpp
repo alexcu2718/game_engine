@@ -14,6 +14,7 @@
 #include "backend/resources/upload/vk_texture_uploader.hpp"
 #include "engine/assets/image_data.hpp"
 #include "engine/camera/camera_ubo.hpp"
+#include "engine/mesh/mesh_data.hpp"
 #include "engine/mesh/vertex.hpp"
 #include "mesh_gpu.hpp"
 #include "vk_framebuffers.hpp"
@@ -21,6 +22,9 @@
 #include "vk_render_pass.hpp"
 
 #include <cstdint>
+#include <glm/ext/matrix_float4x4.hpp>
+#include <glm/ext/vector_float3.hpp>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -35,6 +39,12 @@ struct MeshHandle {
 
 struct TextureHandle {
   uint32_t id = UINT32_MAX;
+};
+
+struct DrawItem {
+  MeshHandle mesh{};
+  uint32_t material = UINT32_MAX;
+  glm::mat4 model = glm::mat4(1.0F);
 };
 
 class Renderer {
@@ -93,9 +103,12 @@ public:
 
   MeshHandle createMesh(const engine::Vertex *vertices, uint32_t vertexCount,
                         const uint32_t *indices, uint32_t indexCount);
+  MeshHandle createMesh(const engine::MeshData &mesh);
   [[nodiscard]] const MeshGpu *mesh(MeshHandle handle) const;
 
   [[nodiscard]] bool drawFrame(VkPresenter &presenter, MeshHandle mesh);
+  [[nodiscard]] bool drawFrame(VkPresenter &presenter,
+                               std::span<const DrawItem> items);
 
   bool recreateSwapchainDependent(VkPresenter &presenter,
                                   const std::string &vertSpvPath,
@@ -111,10 +124,11 @@ public:
 
 private:
   void recordFrame(VkCommandBuffer cmd, VkFramebuffer fb, VkExtent2D extent,
-                   const MeshGpu &mesh);
-
-  // Todo delete: test rotations
-  float m_timeSeconds = 0.0F;
+                   MeshHandle mesh, uint32_t material,
+                   glm::vec3 pos = {0, 0, 0}, glm::vec3 rotRad = {0, 0, 0},
+                   glm::vec3 scale = {1, 1, 1});
+  void recordFrame(VkCommandBuffer cmd, VkFramebuffer fb, VkExtent2D extent,
+                   std::span<const DrawItem> items);
 
   VkBackendCtx *m_ctx = nullptr; // non-owning
 

@@ -1,19 +1,18 @@
-add_library(engine_resources_upload STATIC 
+add_library(quark_backend_resources_upload STATIC 
     vk_buffer_uploader.cpp
     vk_texture_uploader.cpp
 )
 
-target_include_directories(engine_resources_upload
+target_include_directories(quark_backend_resources_upload
     PUBLIC
       ${CMAKE_SOURCE_DIR}/src
 )
 
-target_link_libraries(engine_resources_upload
+target_link_libraries(quark_backend_resources_upload
     PUBLIC
       Vulkan::Vulkan
-      engine::frame
-      # engine::resources::buffers
+      quark::backend::frame
       GPUOpen::VulkanMemoryAllocator
 )
 
-add_library(engine::resources::upload ALIAS engine_resources_upload)
+add_library(quark::backend::resources::upload ALIAS quark_backend_resources_upload)

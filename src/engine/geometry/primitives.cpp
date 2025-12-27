@@ -1,5 +1,7 @@
 #include "primitives.hpp"
+
 #include "engine/geometry/mesh_builder.hpp"
+#include "engine/mesh/mesh_data.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -52,6 +54,7 @@ MeshData square(float size) {
 
 MeshData cube(float size) {
   engine::MeshBuilder builder;
+
   builder.reserve(24, 36);
 
   const float h = size * 0.5F;
@@ -79,7 +82,6 @@ MeshData cube(float size) {
 }
 
 MeshData circle(uint32_t segments, float radius) {
-
   if (radius == 0) {
     std::cerr << "[Primitives] circle cannot had radius of 0\n";
     return {};

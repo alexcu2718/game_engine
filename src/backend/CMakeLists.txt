@@ -5,14 +5,14 @@ add_subdirectory(render)
 add_subdirectory(resources)
 add_subdirectory(shaders)
 
-add_library(engine_backend INTERFACE)
-target_link_libraries(engine_backend INTERFACE
-  engine::core
-  engine::frame
-  engine::presentation
-  engine::render
+add_library(quark_backend INTERFACE)
+target_link_libraries(quark_backend INTERFACE
+  quark::backend::core
+  quark::backend::frame
+  quark::backend::presentation
+  quark::backend::render
   engine::resources
-  engine::shaders
+  quark::backend::shaders
 )
 
-add_library(engine::backend ALIAS engine_backend)
+add_library(quark::backend ALIAS quark_backend)

@@ -1,15 +1,15 @@
-add_library(engine_resources_textures STATIC 
+add_library(quark_backend_resources_textures STATIC 
     vk_texture_utils.cpp
 )
 
-target_include_directories(engine_resources_textures
+target_include_directories(quark_backend_resources_textures
     PUBLIC
         ${CMAKE_SOURCE_DIR}/src
 )
 
-target_link_libraries(engine_resources_textures
+target_link_libraries(quark_backend_resources_textures
     PUBLIC
         Vulkan::Vulkan
 )
 
-add_library(engine::resources::textures ALIAS engine_resources_textures)
+add_library(quark::backend::resources::textures ALIAS quark_backend_resources_textures)

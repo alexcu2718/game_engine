@@ -2,12 +2,12 @@ add_subdirectory(backend)
 add_subdirectory(engine)
 add_subdirectory(platform)
 
-add_executable(engine_app main.cpp)
+add_executable(quark main.cpp)
 
-target_link_libraries(engine_app
+target_link_libraries(quark
   PRIVATE 
-    engine::backend
-    engine::engine
-    engine::platform
+    quark::backend
+    quark::engine
+    quark::platform
 )
 

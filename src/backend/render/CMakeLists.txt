@@ -1,22 +1,22 @@
-add_library(engine_render STATIC 
+add_library(quark_backend_render STATIC 
     renderer.cpp
     vk_framebuffers.cpp
     vk_pipeline.cpp
     vk_render_pass.cpp
 )
 
-target_include_directories(engine_render
+target_include_directories(quark_backend_render
     PUBLIC
         ${CMAKE_SOURCE_DIR}/src
 )
 
-target_link_libraries(engine_render
+target_link_libraries(quark_backend_render
     PUBLIC
-        engine::frame
-        engine::presentation
-        engine::core
+        quark::backend::frame
+        quark::backend::presentation
+        quark::backend::core
         Vulkan::Vulkan
         glm::glm
 )
 
-add_library(engine::render ALIAS engine_render)
+add_library(quark::backend::render ALIAS quark_backend_render)

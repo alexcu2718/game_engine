@@ -1,17 +1,17 @@
-add_library(engine_frame STATIC 
+add_library(quark_backend_frame STATIC 
     vk_commands.cpp
     vk_frame_manager.cpp
 )
 
-target_include_directories(engine_frame
+target_include_directories(quark_backend_frame
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(engine_frame
+target_link_libraries(quark_backend_frame
     PUBLIC
       Vulkan::Vulkan
-      engine::core
+      quark::backend::core
 )
 
-add_library(engine::frame ALIAS engine_frame)
+add_library(quark::backend::frame ALIAS quark_backend_frame)
