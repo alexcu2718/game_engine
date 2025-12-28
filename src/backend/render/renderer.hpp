@@ -34,7 +34,7 @@ class VkPresenter;
 class VkBackendCtx;
 
 struct MeshHandle {
-  uint32_t id = 0;
+  uint32_t id = UINT32_MAX;
 };
 
 struct TextureHandle {
@@ -81,6 +81,7 @@ public:
     m_textures = std::move(other.m_textures);
     m_materials = std::move(other.m_materials);
     m_activeMaterial = std::exchange(other.m_activeMaterial, UINT32_MAX);
+    m_defaultMaterial = std::exchange(other.m_defaultMaterial, UINT32_MAX);
 
     m_uploader = std::move(other.m_uploader);
     m_meshes = std::move(other.m_meshes);
@@ -123,6 +124,8 @@ public:
   void setActiveMaterial(uint32_t materialIndex);
 
 private:
+  bool createDefaultMaterial() noexcept;
+
   void recordFrame(VkCommandBuffer cmd, VkFramebuffer fb, VkExtent2D extent,
                    MeshHandle mesh, uint32_t material,
                    glm::vec3 pos = {0, 0, 0}, glm::vec3 rotRad = {0, 0, 0},
@@ -146,6 +149,7 @@ private:
   VkMaterialSets m_materials;
   uint32_t m_activeMaterial = UINT32_MAX;
   VkTextureUploader m_textureUploader;
+  uint32_t m_defaultMaterial = UINT32_MAX;
 
   std::vector<MeshGpu> m_meshes;
   VkBufferUploader m_uploader;

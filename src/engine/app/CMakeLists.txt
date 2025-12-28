@@ -17,5 +17,4 @@ target_link_libraries(quark_engine_app
       Vulkan::Vulkan
 )
 
-
 add_library(quark::engine::app ALIAS quark_engine_app)

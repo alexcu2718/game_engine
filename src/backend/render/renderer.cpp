@@ -2,7 +2,7 @@
 
 #include "backend/core/vk_backend_ctx.hpp"
 #include "backend/resources/buffers/vk_buffer.hpp"
-#include "engine/assets/stb_image_loader.hpp"
+#include "engine/assets/stb_image/stb_image_loader.hpp"
 #include "engine/geometry/transform.hpp"
 #include "engine/mesh/mesh_data.hpp"
 #include "engine/mesh/vertex.hpp"
@@ -18,6 +18,7 @@
 #include <iostream>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
@@ -125,6 +126,13 @@ bool Renderer::init(VkBackendCtx &ctx, VkPresenter &presenter,
     return false;
   }
 
+  // Create a 1x1 default white texture and material
+  if (!createDefaultMaterial()) {
+    std::cerr << "[Renderer] Failed to create the default material";
+    shutdown();
+    return false;
+  }
+
   // Allocate buffer per frame
   if (!m_commands.allocate(m_framesInFlight)) {
     std::cerr << "[Renderer] Failed to allocate command buffers\n";
@@ -176,6 +184,9 @@ void Renderer::shutdown() noexcept {
   m_textureUploader.shutdown();
   m_materials.shutdown();
 
+  m_defaultMaterial = UINT32_MAX;
+  m_activeMaterial = UINT32_MAX;
+
   m_commands.shutdown();
 
   // Swapchain-dependents
@@ -189,6 +200,31 @@ void Renderer::shutdown() noexcept {
 
   m_vertPath.clear();
   m_fragPath.clear();
+}
+
+bool Renderer::createDefaultMaterial() noexcept {
+  VkTexture2D tex;
+
+  static constexpr std::array<std::uint8_t, 4> kWhiteRGBA8{255, 255, 255, 255};
+
+  if (!m_textureUploader.uploadRGBA8(kWhiteRGBA8.data(), 1, 1, tex)) {
+    std::cerr << "[Renderer] Failed to create default white texture\n";
+    shutdown();
+    return false;
+  }
+
+  m_textures.push_back(std::move(tex));
+  const TextureHandle texHandle{static_cast<uint32_t>(m_textures.size() - 1)};
+
+  m_defaultMaterial = createMaterialFromTexture(texHandle);
+  if (m_defaultMaterial == UINT32_MAX) {
+    std::cerr << "[Renderer] Failed to create default material\n";
+    shutdown();
+    return false;
+  }
+
+  m_activeMaterial = m_defaultMaterial;
+  return true;
 }
 
 MeshHandle Renderer::createMesh(const engine::Vertex *vertices,
@@ -303,9 +339,15 @@ void Renderer::recordFrame(VkCommandBuffer cmd, VkFramebuffer fb,
       continue;
     }
 
-    if (item.material != UINT32_MAX) {
-      m_materials.bind(cmd, m_interface.pipelineLayout(), 1, item.material);
+    uint32_t mat = m_defaultMaterial;
+    if (m_activeMaterial != UINT32_MAX) {
+      mat = m_activeMaterial;
     }
+
+    if (item.material != UINT32_MAX) {
+      mat = item.material;
+    }
+    m_materials.bind(cmd, m_interface.pipelineLayout(), 1, mat);
 
     vkCmdPushConstants(cmd, m_interface.pipelineLayout(),
                        VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4),
@@ -461,7 +503,7 @@ void Renderer::setActiveMaterial(uint32_t materialIndex) {
 TextureHandle Renderer::createTextureFromFile(const std::string &path,
                                               bool flipY) {
   engine::ImageData img;
-  if (!loadImageRGBA8(path, img, flipY)) {
+  if (!engine::assets::loadImageRGBA8(path, img, flipY)) {
     std::cerr << "[Renderer] Failed to load image: " << path << "\n";
     return {};
   }
