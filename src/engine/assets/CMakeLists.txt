@@ -1,6 +1,8 @@
 add_library(quark_engine_assets STATIC
     stb_image_impl.cpp
     stb_image_loader.cpp
+    cgltf_impl.cpp
+    gltf_loader.cpp
 )
 
 target_include_directories(quark_engine_assets
