@@ -13,6 +13,4 @@ struct MeshData {
   std::vector<uint32_t> indices;
 };
 
-// waodijawodjaowd
-
 } // namespace engine

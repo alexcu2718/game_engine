@@ -9,7 +9,7 @@ target_include_directories(quark_engine_assets
       quark::backend::renderer
     PRIVATE
       ${Stb_INCLUDE_DIR}
-      # ${CGLTF_INCLUDE_DIRS}
+      ${CGLTF_INCLUDE_DIRS}
 )
 
 add_library(quark::engine::assets ALIAS quark_engine_assets)
