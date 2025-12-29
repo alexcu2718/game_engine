@@ -97,7 +97,6 @@ bool VkDeviceCtx::init(VkInstance instance) {
 
 void VkDeviceCtx::shutdown() noexcept {
   if (m_device != VK_NULL_HANDLE) {
-    vkDeviceWaitIdle(m_device);
     vkDestroyDevice(m_device, nullptr);
     m_device = VK_NULL_HANDLE;
   }

@@ -1,11 +1,13 @@
 #include "renderer.hpp"
 
 #include "backend/core/vk_backend_ctx.hpp"
+#include "backend/profiling/profiler.hpp"
 #include "backend/render/resources/mesh_gpu.hpp"
 #include "engine/geometry/transform.hpp"
 #include "engine/mesh/mesh_data.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <glm/ext/matrix_float4x4.hpp>
 #include <glm/ext/vector_float3.hpp>
@@ -168,6 +170,7 @@ void Renderer::recordFrame(VkCommandBuffer cmd, VkFramebuffer fb,
   vkCmdBeginRenderPass(cmd, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);
   vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                     m_mainPass.pipeline());
+  m_profiler.incPipelineBinds(1);
 
   // Viewport / scissor
   VkViewport viewport{};
@@ -185,8 +188,12 @@ void Renderer::recordFrame(VkCommandBuffer cmd, VkFramebuffer fb,
   vkCmdSetScissor(cmd, 0, 1, &scissor);
 
   m_perFrame.bind(cmd, m_interface, m_frames.currentFrameIndex());
+  m_profiler.incDescriptorBinds(1);
 
   for (const DrawItem &item : items) {
+    m_profiler.incDrawCalls(1);
+    m_profiler.incDescriptorBinds(1);
+
     const MeshGpu *mesh = m_resources.meshes().get(item.mesh);
     if (mesh == nullptr) {
       continue;
@@ -208,8 +215,10 @@ void Renderer::recordFrame(VkCommandBuffer cmd, VkFramebuffer fb,
       vkCmdBindIndexBuffer(cmd, mesh->index.handle(), indexBufOffset,
                            mesh->indexType);
       vkCmdDrawIndexed(cmd, mesh->indexCount, 1, 0, 0, 0);
+      m_profiler.addTriangles(mesh->indexCount / 3);
     } else {
       vkCmdDraw(cmd, mesh->vertexCount, 1, 0, 0);
+      m_profiler.addTriangles(mesh->vertexCount / 3);
     }
   }
 
@@ -227,6 +236,54 @@ bool Renderer::drawFrame(VkPresenter &presenter, MeshHandle mesh) {
 
 bool Renderer::drawFrame(VkPresenter &presenter,
                          std::span<const DrawItem> items) {
+  bool ret = false;
+
+  {
+    CpuProfiler::Scope frameScope(m_profiler, CpuProfiler::Stat::FrameTotal);
+    // Follow drawFrameImpl for drawFrame implementation
+    // drawFrameImpl is split for a simple profiler scope
+    ret = drawFrameImpl(presenter, items);
+  }
+
+  m_profiler.endFrame();
+
+  const auto &st = m_profiler.last();
+
+  // TODO: move printing to helper function
+  // log even 120 frames
+  ++m_frameCounter;
+  if ((m_frameCounter % 120ULL) == 0ULL) {
+    std::cerr << "[Profiler] CPU ms: frame="
+              << st.ms[(size_t)CpuProfiler::Stat::FrameTotal]
+              << " acquire=" << st.ms[(size_t)CpuProfiler::Stat::Acquire]
+              << " waitForFence="
+              << st.ms[(size_t)CpuProfiler::Stat::WaitForFence]
+              << " ubo=" << st.ms[(size_t)CpuProfiler::Stat::UpdatePerFrameUBO]
+              << " record="
+              << st.ms[(size_t)CpuProfiler::Stat::RecordCmd]
+              // NOTE: if queueSubmit is large its likely artifical wait time
+              // for vsync from FIFO present mode in swapchain
+              << " queueSubmit="
+              << st.ms[(size_t)CpuProfiler::Stat::QueueSubmit]
+              << " queuePresent="
+              << st.ms[(size_t)CpuProfiler::Stat::QueuePresent]
+              << " draws=" << st.drawCalls << " triangles=" << st.triangles
+              << " pipeBinds=" << st.pipelineBinds
+              << " descBinds=" << st.descriptorBinds
+              << " other=" << st.ms[(size_t)CpuProfiler::Stat::Other] << "\n";
+    // Note: Most of other is likely from the vkWaitForFence in commands on
+    // submit immediate. I didn't bother logging this since its a pain to pass
+    // since mesh_store is the one who calls the uploaders who then call submit
+    // immediate so I would have to pass profiler a lot. But it doesn't matter
+    // since eventually submit Immediate will be removed and we won't have
+    // blocking anymore
+  }
+
+  return ret;
+}
+
+bool Renderer::drawFrameImpl(VkPresenter &presenter,
+                             std::span<const DrawItem> items) {
   if (m_ctx->device() == VK_NULL_HANDLE) {
     return false;
   }
@@ -234,8 +291,13 @@ bool Renderer::drawFrame(VkPresenter &presenter,
   using FrameStatus = VkFrameManager::FrameStatus;
 
   uint32_t imageIndex = 0;
-  auto st = m_frames.beginFrame(presenter.swapchain(), imageIndex);
+
+  FrameStatus st = FrameStatus::Ok;
+  st = m_frames.beginFrame(presenter.swapchain(), imageIndex, UINT64_MAX,
+                           &m_profiler);
+
   if (st == FrameStatus::OutOfDate) {
+    CpuProfiler::Scope r(m_profiler, CpuProfiler::Stat::SwapchainRecreate);
     (void)recreateSwapchainDependent(presenter, m_vertPath, m_fragPath);
     return true;
   }
@@ -246,18 +308,28 @@ bool Renderer::drawFrame(VkPresenter &presenter,
 
   const uint32_t frameIndex = m_frames.currentFrameIndex();
 
-  (void)m_perFrame.update(frameIndex, m_cameraUbo);
+  {
+    CpuProfiler::Scope s(m_profiler, CpuProfiler::Stat::UpdatePerFrameUBO);
+    (void)m_perFrame.update(frameIndex, m_cameraUbo);
+  }
 
   VkCommandBuffer cmd = m_commands.buffers()[frameIndex];
   vkResetCommandBuffer(cmd, 0);
 
-  recordFrame(cmd, m_fbos.at(imageIndex), presenter.swapchainExtent(), items);
+  {
+    CpuProfiler::Scope s(m_profiler, CpuProfiler::Stat::RecordCmd);
+    recordFrame(cmd, m_fbos.at(imageIndex), presenter.swapchainExtent(), items);
+  }
 
-  auto pst = m_frames.submitAndPresent(m_ctx->graphicsQueue(),
-                                       presenter.swapchain(), imageIndex, cmd);
+  FrameStatus pst;
+  m_frames.submit(m_ctx->graphicsQueue(), imageIndex, cmd,
+                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, &m_profiler);
+  pst = m_frames.present(m_ctx->graphicsQueue(), presenter.swapchain(),
+                         imageIndex, &m_profiler);
 
   // TODO: handle SUBOPTIMAL recreate, i.e when convienent instead of now
   if (pst == FrameStatus::OutOfDate) {
+    CpuProfiler::Scope r(m_profiler, CpuProfiler::Stat::SwapchainRecreate);
     (void)recreateSwapchainDependent(presenter, m_vertPath, m_fragPath);
     return true;
   }

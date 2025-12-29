@@ -4,6 +4,7 @@
 #include "backend/frame/vk_commands.hpp"
 #include "backend/frame/vk_frame_manager.hpp"
 #include "backend/presentation/vk_presenter.hpp"
+#include "backend/profiling/profiler.hpp"
 #include "backend/render/framebuffer_cache.hpp"
 #include "backend/render/main_pass.hpp"
 #include "backend/render/per_frame_data.hpp"
@@ -109,6 +110,11 @@ private:
                    glm::vec3 scale = {1, 1, 1});
   void recordFrame(VkCommandBuffer cmd, VkFramebuffer fb, VkExtent2D extent,
                    std::span<const DrawItem> items);
+
+  bool drawFrameImpl(VkPresenter &presenter, std::span<const DrawItem> items);
+
+  CpuProfiler m_profiler;
+  uint64_t m_frameCounter = 0;
 
   uint32_t m_framesInFlight = 0;
   VkBackendCtx *m_ctx = nullptr; // non-owning
