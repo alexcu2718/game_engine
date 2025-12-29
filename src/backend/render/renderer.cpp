@@ -50,14 +50,33 @@ bool Renderer::init(VkBackendCtx &ctx, VkPresenter &presenter,
   VkPhysicalDevice physicalDevice = m_ctx->physicalDevice();
   VmaAllocator allocator = m_ctx->allocator();
 
-  if (!m_depth.init(allocator, physicalDevice, device, presenter.extent())) {
-    std::cerr << "[Renderer] Failed to create depth buffer\n";
-    shutdown();
+  const uint32_t imageCount = presenter.imageCount();
+  if (imageCount == 0) {
+    std::cerr << "[Renderer] presenter.imageCount() == 0\n";
     return false;
   }
 
+  m_depthImages.clear();
+  m_depthImages.resize(imageCount);
+
+  for (uint32_t i = 0; i < presenter.imageCount(); ++i) {
+    if (!m_depthImages[i].init(allocator, physicalDevice, device,
+                               presenter.extent())) {
+      std::cerr << "[Renderer] Failed to create depth buffer\n";
+      shutdown();
+      return false;
+    }
+  }
+
+  std::vector<VkImageView> depthViews;
+  depthViews.reserve(presenter.imageCount());
+  for (const auto &depth : m_depthImages) {
+    depthViews.push_back(depth.view());
+  }
+
   // Create render pass
-  if (!m_renderPass.init(device, presenter.imageFormat(), m_depth.format())) {
+  if (!m_renderPass.init(device, presenter.imageFormat(),
+                         m_depthImages[0].format())) {
     std::cerr << "[Renderer] Failed to create render pass\n";
     shutdown();
     return false;
@@ -80,7 +99,7 @@ bool Renderer::init(VkBackendCtx &ctx, VkPresenter &presenter,
 
   // Create frame buffers
   if (!m_framebuffers.init(device, m_renderPass.handle(),
-                           presenter.imageViews(), m_depth.view(),
+                           presenter.imageViews(), depthViews,
                            presenter.extent())) {
     std::cerr << "[Renderer] Failed to create framebuffers\n";
     shutdown();
@@ -129,7 +148,6 @@ bool Renderer::init(VkBackendCtx &ctx, VkPresenter &presenter,
   // Create a 1x1 default white texture and material
   if (!createDefaultMaterial()) {
     std::cerr << "[Renderer] Failed to create the default material";
-    shutdown();
     return false;
   }
 
@@ -139,9 +157,6 @@ bool Renderer::init(VkBackendCtx &ctx, VkPresenter &presenter,
     shutdown();
     return false;
   }
-
-  const uint32_t imageCount =
-      static_cast<uint32_t>(presenter.imageViews().size());
 
   if (!m_frames.init(device, m_framesInFlight, imageCount)) {
     std::cerr << "[Renderer] Failed to create frame sync objects\n";
@@ -193,7 +208,10 @@ void Renderer::shutdown() noexcept {
   m_framebuffers.shutdown();
   m_pipeline.shutdown();
   m_renderPass.shutdown();
-  m_depth.shutdown();
+  for (auto &depth : m_depthImages) {
+    depth.shutdown();
+  }
+  m_depthImages.clear();
 
   m_ctx = nullptr;
   m_framesInFlight = 0;
@@ -433,6 +451,7 @@ bool Renderer::recreateSwapchainDependent(VkPresenter &presenter,
 
   const VkFormat oldFormat = presenter.imageFormat();
   const VkExtent2D oldExtent = presenter.extent();
+  const uint32_t oldImageCount = presenter.imageCount();
 
   vkDeviceWaitIdle(device);
 
@@ -448,16 +467,25 @@ bool Renderer::recreateSwapchainDependent(VkPresenter &presenter,
 
   // Keep depth unless extent changes
   const VkExtent2D newExtent = presenter.extent();
+  const uint32_t newImageCount = presenter.imageCount();
   const bool extentChanged = oldExtent.width != newExtent.width ||
                              oldExtent.height != newExtent.height;
+  const bool imageCountChanged = (oldImageCount != newImageCount);
 
-  if (extentChanged) {
-    m_depth.shutdown();
+  if (extentChanged || imageCountChanged ||
+      m_depthImages.size() != newImageCount) {
+    for (auto &depth : m_depthImages) {
+      depth.shutdown();
+    }
+    m_depthImages.clear();
+    m_depthImages.resize(presenter.imageCount());
 
     // Recreate depth
-    if (!m_depth.init(m_ctx->allocator(), m_ctx->physicalDevice(), device,
-                      presenter.extent())) {
-      return false;
+    for (uint32_t i = 0; i < presenter.imageCount(); ++i) {
+      if (!m_depthImages[i].init(m_ctx->allocator(), m_ctx->physicalDevice(),
+                                 device, presenter.extent())) {
+        return false;
+      }
     }
   }
 
@@ -465,7 +493,12 @@ bool Renderer::recreateSwapchainDependent(VkPresenter &presenter,
     m_pipeline.shutdown();
     m_renderPass.shutdown();
 
-    if (!m_renderPass.init(device, presenter.imageFormat(), m_depth.format())) {
+    if (m_depthImages.empty()) {
+      return false;
+    }
+
+    if (!m_renderPass.init(device, presenter.imageFormat(),
+                           m_depthImages[0].format())) {
       return false;
     }
 
@@ -476,9 +509,15 @@ bool Renderer::recreateSwapchainDependent(VkPresenter &presenter,
     }
   }
 
+  std::vector<VkImageView> depthViews;
+  depthViews.reserve(m_depthImages.size());
+  for (const auto &d : m_depthImages) {
+    depthViews.push_back(d.view());
+  }
+
   // Recreate framebuffers
   if (!m_framebuffers.init(device, m_renderPass.handle(),
-                           presenter.imageViews(), m_depth.view(),
+                           presenter.imageViews(), depthViews,
                            presenter.extent())) {
     return false;
   }

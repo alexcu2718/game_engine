@@ -158,7 +158,7 @@ private:
   VkGraphicsPipeline m_pipeline;
   VkFramebuffers m_framebuffers;
 
-  VkDepthImage m_depth;
+  std::vector<VkDepthImage> m_depthImages; // one per swapchain image
 
   std::string m_vertPath;
   std::string m_fragPath;

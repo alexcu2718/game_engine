@@ -1,5 +1,6 @@
 add_library(quark_engine_assets_gltf STATIC 
     cgltf_impl.cpp
+    gltf_asset.cpp
     gltf_cpu_loader.cpp
     gltf_gpu_builder.cpp
 )
