@@ -14,7 +14,10 @@ target_link_libraries(quark_backend_render_resources
         quark::backend::graphics
         quark::backend::frame
         quark::backend::core
-        engine::resources
+        quark::backend::resources::upload
+        quark::backend::resources::descriptors
+        quark::backend::resources::buffers 
+        quark::backend::resources::textures
         quark::engine::assets::stb_image
 )
 

@@ -5,6 +5,7 @@ add_subdirectory(render)
 add_subdirectory(graphics)
 add_subdirectory(resources)
 add_subdirectory(shaders)
+add_subdirectory(profiling)
 
 add_library(quark_backend INTERFACE)
 target_link_libraries(quark_backend INTERFACE
@@ -13,8 +14,9 @@ target_link_libraries(quark_backend INTERFACE
   quark::backend::presentation
   quark::backend::render
   quark::backend::graphics
-  engine::resources
+  quark::backend::resources
   quark::backend::shaders
+  quark::backend::profiling
 )
 
 add_library(quark::backend ALIAS quark_backend)

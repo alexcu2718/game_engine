@@ -2,7 +2,10 @@
 
 #include "backend/core/vk_backend_ctx.hpp"
 #include "backend/profiling/profiler.hpp"
+#include "backend/profiling/profiling_logger.hpp"
+#include "backend/profiling/vk_gpu_profiler.hpp"
 #include "backend/render/resources/mesh_gpu.hpp"
+#include "backend/util/scope_exit.hpp"
 #include "engine/geometry/transform.hpp"
 #include "engine/mesh/mesh_data.hpp"
 
@@ -40,6 +43,12 @@ bool Renderer::init(VkBackendCtx &ctx, VkPresenter &presenter,
   m_fragPath = fragSpvPath;
 
   VkDevice device = m_ctx->device();
+
+  if (!m_gpuProfiler.init(*m_ctx, m_framesInFlight)) {
+    std::cerr << "[Renderer] Failed to init GPU profiler\n";
+    shutdown();
+    return false;
+  }
 
   // Create swapchain targets
   if (!m_targets.init(*m_ctx, presenter)) {
@@ -130,6 +139,7 @@ void Renderer::shutdown() noexcept {
 
   m_ctx = nullptr;
   m_framesInFlight = 0;
+  m_gpuProfiler.shutdown();
 
   m_vertPath.clear();
   m_fragPath.clear();
@@ -153,6 +163,11 @@ void Renderer::recordFrame(VkCommandBuffer cmd, VkFramebuffer fb,
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   vkBeginCommandBuffer(cmd, &beginInfo);
 
+  const uint32_t frameIndex = m_frames.currentFrameIndex();
+
+  m_gpuProfiler.beginFrameCmd(cmd, frameIndex);
+  m_gpuProfiler.markFrameBegin(cmd, frameIndex);
+
   std::array<VkClearValue, 2> clears{};
   clears[0].color = {{0.05F, 0.05F, 0.08F, 1.0F}};
   clears[1].depthStencil =
@@ -167,10 +182,11 @@ void Renderer::recordFrame(VkCommandBuffer cmd, VkFramebuffer fb,
   rpBegin.clearValueCount = static_cast<uint32_t>(clears.size());
   rpBegin.pClearValues = clears.data();
 
+  m_gpuProfiler.markMainPassBegin(cmd, frameIndex);
   vkCmdBeginRenderPass(cmd, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);
   vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                     m_mainPass.pipeline());
-  m_profiler.incPipelineBinds(1);
+  m_cpuProfiler.incPipelineBinds(1);
 
   // Viewport / scissor
   VkViewport viewport{};
@@ -188,11 +204,11 @@ void Renderer::recordFrame(VkCommandBuffer cmd, VkFramebuffer fb,
   vkCmdSetScissor(cmd, 0, 1, &scissor);
 
   m_perFrame.bind(cmd, m_interface, m_frames.currentFrameIndex());
-  m_profiler.incDescriptorBinds(1);
+  m_cpuProfiler.incDescriptorBinds(1);
 
   for (const DrawItem &item : items) {
-    m_profiler.incDrawCalls(1);
-    m_profiler.incDescriptorBinds(1);
+    m_cpuProfiler.incDrawCalls(1);
+    m_cpuProfiler.incDescriptorBinds(1);
 
     const MeshGpu *mesh = m_resources.meshes().get(item.mesh);
     if (mesh == nullptr) {
@@ -215,14 +231,17 @@ void Renderer::recordFrame(VkCommandBuffer cmd, VkFramebuffer fb,
       vkCmdBindIndexBuffer(cmd, mesh->index.handle(), indexBufOffset,
                            mesh->indexType);
       vkCmdDrawIndexed(cmd, mesh->indexCount, 1, 0, 0, 0);
-      m_profiler.addTriangles(mesh->indexCount / 3);
+      m_cpuProfiler.addTriangles(mesh->indexCount / 3);
     } else {
       vkCmdDraw(cmd, mesh->vertexCount, 1, 0, 0);
-      m_profiler.addTriangles(mesh->vertexCount / 3);
+      m_cpuProfiler.addTriangles(mesh->vertexCount / 3);
     }
   }
 
   vkCmdEndRenderPass(cmd);
+  m_gpuProfiler.markMainPassEnd(cmd, frameIndex);
+
+  m_gpuProfiler.markFrameEnd(cmd, frameIndex);
   vkEndCommandBuffer(cmd);
 }
 
@@ -236,54 +255,13 @@ bool Renderer::drawFrame(VkPresenter &presenter, MeshHandle mesh) {
 
 bool Renderer::drawFrame(VkPresenter &presenter,
                          std::span<const DrawItem> items) {
-  bool ret = false;
+  auto endGuard = makeScopeExit([&] {
+    m_cpuProfiler.endFrame();
+    m_profileReporter.logIfDue(m_cpuProfiler, m_gpuProfiler);
+  });
 
-  {
-    CpuProfiler::Scope frameScope(m_profiler, CpuProfiler::Stat::FrameTotal);
-    // Follow drawFrameImpl for drawFrame implementation
-    // drawFrameImpl is split for a simple profiler scope
-    ret = drawFrameImpl(presenter, items);
-  }
+  CpuProfiler::Scope frameScope(m_cpuProfiler, CpuProfiler::Stat::FrameTotal);
 
-  m_profiler.endFrame();
-
-  const auto &st = m_profiler.last();
-
-  // TODO: move printing to helper function
-  // log even 120 frames
-  ++m_frameCounter;
-  if ((m_frameCounter % 120ULL) == 0ULL) {
-    std::cerr << "[Profiler] CPU ms: frame="
-              << st.ms[(size_t)CpuProfiler::Stat::FrameTotal]
-              << " acquire=" << st.ms[(size_t)CpuProfiler::Stat::Acquire]
-              << " waitForFence="
-              << st.ms[(size_t)CpuProfiler::Stat::WaitForFence]
-              << " ubo=" << st.ms[(size_t)CpuProfiler::Stat::UpdatePerFrameUBO]
-              << " record="
-              << st.ms[(size_t)CpuProfiler::Stat::RecordCmd]
-              // NOTE: if queueSubmit is large its likely artifical wait time
-              // for vsync from FIFO present mode in swapchain
-              << " queueSubmit="
-              << st.ms[(size_t)CpuProfiler::Stat::QueueSubmit]
-              << " queuePresent="
-              << st.ms[(size_t)CpuProfiler::Stat::QueuePresent]
-              << " draws=" << st.drawCalls << " triangles=" << st.triangles
-              << " pipeBinds=" << st.pipelineBinds
-              << " descBinds=" << st.descriptorBinds
-              << " other=" << st.ms[(size_t)CpuProfiler::Stat::Other] << "\n";
-    // Note: Most of other is likely from the vkWaitForFence in commands on
-    // submit immediate. I didn't bother logging this since its a pain to pass
-    // since mesh_store is the one who calls the uploaders who then call submit
-    // immediate so I would have to pass profiler a lot. But it doesn't matter
-    // since eventually submit Immediate will be removed and we won't have
-    // blocking anymore
-  }
-
-  return ret;
-}
-
-bool Renderer::drawFrameImpl(VkPresenter &presenter,
-                             std::span<const DrawItem> items) {
   if (m_ctx->device() == VK_NULL_HANDLE) {
     return false;
   }
@@ -294,10 +272,9 @@ bool Renderer::drawFrameImpl(VkPresenter &presenter,
 
   FrameStatus st = FrameStatus::Ok;
   st = m_frames.beginFrame(presenter.swapchain(), imageIndex, UINT64_MAX,
-                           &m_profiler);
+                           &m_cpuProfiler);
 
   if (st == FrameStatus::OutOfDate) {
-    CpuProfiler::Scope r(m_profiler, CpuProfiler::Stat::SwapchainRecreate);
     (void)recreateSwapchainDependent(presenter, m_vertPath, m_fragPath);
     return true;
   }
@@ -309,7 +286,7 @@ bool Renderer::drawFrameImpl(VkPresenter &presenter,
   const uint32_t frameIndex = m_frames.currentFrameIndex();
 
   {
-    CpuProfiler::Scope s(m_profiler, CpuProfiler::Stat::UpdatePerFrameUBO);
+    CpuProfiler::Scope s(m_cpuProfiler, CpuProfiler::Stat::UpdatePerFrameUBO);
     (void)m_perFrame.update(frameIndex, m_cameraUbo);
   }
 
@@ -317,19 +294,26 @@ bool Renderer::drawFrameImpl(VkPresenter &presenter,
   vkResetCommandBuffer(cmd, 0);
 
   {
-    CpuProfiler::Scope s(m_profiler, CpuProfiler::Stat::RecordCmd);
+    CpuProfiler::Scope s(m_cpuProfiler, CpuProfiler::Stat::RecordCmd);
     recordFrame(cmd, m_fbos.at(imageIndex), presenter.swapchainExtent(), items);
   }
 
-  FrameStatus pst;
-  m_frames.submit(m_ctx->graphicsQueue(), imageIndex, cmd,
-                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, &m_profiler);
-  pst = m_frames.present(m_ctx->graphicsQueue(), presenter.swapchain(),
-                         imageIndex, &m_profiler);
+  FrameStatus sub = m_frames.submit(
+      m_ctx->graphicsQueue(), imageIndex, cmd,
+      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, &m_cpuProfiler);
+  if (sub != FrameStatus::Ok) {
+    return false;
+  }
+
+  FrameStatus pst =
+      m_frames.present(m_ctx->graphicsQueue(), presenter.swapchain(),
+                       imageIndex, &m_cpuProfiler);
+
+  m_gpuProfiler.onFrameSubmitted();
+  (void)m_gpuProfiler.tryCollect(frameIndex);
 
   // TODO: handle SUBOPTIMAL recreate, i.e when convienent instead of now
   if (pst == FrameStatus::OutOfDate) {
-    CpuProfiler::Scope r(m_profiler, CpuProfiler::Stat::SwapchainRecreate);
     (void)recreateSwapchainDependent(presenter, m_vertPath, m_fragPath);
     return true;
   }
@@ -340,13 +324,17 @@ bool Renderer::drawFrameImpl(VkPresenter &presenter,
 bool Renderer::recreateSwapchainDependent(VkPresenter &presenter,
                                           const std::string &vertSpvPath,
                                           const std::string &fragSpvPath) {
+  profiling::EventScope scope(profiling::Event::SwapchainRecreate);
+
   if (m_ctx == nullptr || m_ctx->device() == VK_NULL_HANDLE) {
     return false;
   }
 
   VkDevice device = m_ctx->device();
-
-  vkDeviceWaitIdle(device);
+  {
+    profiling::EventScope w(profiling::Event::DeviceWaitIdle);
+    vkDeviceWaitIdle(device);
+  }
 
   m_fbos.shutdown();
 

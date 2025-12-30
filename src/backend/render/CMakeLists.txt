@@ -19,10 +19,14 @@ target_link_libraries(quark_backend_render
         quark::backend::presentation
         quark::backend::graphics
         quark::backend::core
-        engine::resources
+        quark::backend::resources::descriptors
+        quark::backend::profiling
         quark::backend::render::resources
+        quark::engine::camera
         Vulkan::Vulkan
         glm::glm
+    PRIVATE
+        quark::engine::geometry
 )
 
 add_library(quark::backend::render ALIAS quark_backend_render)

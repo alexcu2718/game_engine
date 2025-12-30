@@ -13,6 +13,7 @@ target_link_libraries(quark_engine_app
       quark::platform::window
       quark::backend::presentation
       quark::backend::render
+      quark::engine::geometry
     PRIVATE
       Vulkan::Vulkan
 )

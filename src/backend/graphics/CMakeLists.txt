@@ -14,6 +14,7 @@ target_link_libraries(quark_backend_graphics
       Vulkan::Vulkan
     PRIVATE
       glm::glm
+      quark::backend::shaders
 )
 
 add_library(quark::backend::graphics ALIAS quark_backend_graphics)
